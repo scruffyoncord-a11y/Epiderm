@@ -1,6 +1,10 @@
-# TrustGuard
+# Epiderm
 
 Explainable trust and impersonation risk assessment (Innovators Conclave 2026, PS-02).
+
+## Landing page
+
+The standalone Epiderm marketing website is in [`website/`](website/). It is a single responsive HTML page and does not require a build step. See [`website/README.md`](website/README.md) for local preview instructions.
 
 ## Run
 
