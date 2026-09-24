@@ -1,0 +1,54 @@
+{
+  "id": "legit_urgent",
+  "title": "Legitimate urgent request from a new phone",
+  "description": "The real CFO, boarding a flight, sends an urgent payment request from a new phone. The message sounds urgent, but the link is official, the invoice is genuine, the payee is known, and 2FA and biometric are clean. Urgent language plus one new device must not be treated as a scam. All context data is simulated.",
+  "simulated": true,
+  "event": {
+    "user_id": "anita",
+    "action": {
+      "type": "payment",
+      "amount": 95000,
+      "payee": "Zenith Office Supplies",
+      "payee_account_holder": "Zenith Office Supplies"
+    },
+    "session": {
+      "ip": "103.21.58.77",
+      "ip_country": "IN",
+      "ip_is_vpn": false,
+      "ip_is_datacentre": false,
+      "device_id": "dev-anita-new-tablet",
+      "device_is_emulator": false,
+      "location_country": "IN",
+      "location_city": "Kochi",
+      "hour_local": 19,
+      "minutes_since_last_login": 300
+    },
+    "auth": {
+      "twofa": { "status": "passed", "method": "app", "failed_attempts": 0 },
+      "biometric": { "match_score": 0.9, "liveness": true }
+    },
+    "evidence": {
+      "chat": {
+        "sender_claimed": "Rahul (CFO)",
+        "text": "Anita, urgent: the Zenith quarterly invoice is due today and I'm about to board. Please release it from the portal, I'll confirm as soon as I land."
+      },
+      "url": {
+        "url": "https://acmecorp.com/portal/invoices/2305",
+        "claimed_org": "acmecorp"
+      },
+      "invoice": {
+        "vendor_name": "Zenith Office Supplies",
+        "account_holder": "Zenith Office Supplies",
+        "creator_tool": "Tally Prime",
+        "created_days_ago": 6,
+        "modified_days_ago": 6
+      }
+    }
+  },
+  "expected": {
+    "band": "step_up",
+    "rationale": "Urgency and a new device are weak signals from only two categories, and a large payment raises the bar, so an extra check is right. Everything else is reassuring, so it must not reach the verification workflow.",
+    "must_flag": ["device.new_device", "text.urgency"],
+    "must_not_flag": ["url.lookalike_domain", "document.editing_tool", "text.secrecy", "document.vendor_account_mismatch"]
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "id": "legit_traveller",
+  "title": "Legitimate traveller: normal payment from abroad",
+  "description": "Anita is at a conference in Dubai. Known phone, residential IP, authenticator 2FA, good biometric, known payee, normal amount, official domain, genuine invoice. Only the country is new. This is the false-positive test: it must be asked to step up, never accused. All context data is simulated.",
+  "simulated": true,
+  "event": {
+    "user_id": "anita",
+    "action": {
+      "type": "payment",
+      "amount": 18000,
+      "payee": "Zenith Office Supplies",
+      "payee_account_holder": "Zenith Office Supplies"
+    },
+    "session": {
+      "ip": "94.200.15.20",
+      "ip_country": "AE",
+      "ip_is_vpn": false,
+      "ip_is_datacentre": false,
+      "device_id": "dev-anita-phone",
+      "device_is_emulator": false,
+      "location_country": "AE",
+      "location_city": "Dubai",
+      "hour_local": 14,
+      "minutes_since_last_login": 2880
+    },
+    "auth": {
+      "twofa": { "status": "passed", "method": "app", "failed_attempts": 0 },
+      "biometric": { "match_score": 0.93, "liveness": true }
+    },
+    "evidence": {
+      "chat": {
+        "sender_claimed": "Anita (self)",
+        "text": "Paying this month's stationery invoice from Zenith while I have a minute."
+      },
+      "url": {
+        "url": "https://acmecorp.com/portal/invoices/2291",
+        "claimed_org": "acmecorp"
+      },
+      "invoice": {
+        "vendor_name": "Zenith Office Supplies",
+        "account_holder": "Zenith Office Supplies",
+        "creator_tool": "Tally Prime",
+        "created_days_ago": 3,
+        "modified_days_ago": 3
+      }
+    }
+  },
+  "expected": {
+    "band": "step_up",
+    "rationale": "A single weak signal (new country) plus a high-impact action. Everything else is reassuring, so the corroboration rule keeps this at step-up. It must not reach the verification workflow.",
+    "must_flag": ["location.new_country"],
+    "must_not_flag": ["url.lookalike_domain", "document.editing_tool", "device.new_device", "text.secrecy"]
+  }
+}

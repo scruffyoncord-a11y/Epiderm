@@ -1,0 +1,54 @@
+{
+  "id": "scam_bundle",
+  "title": "Scam bundle: fake CFO payment request",
+  "description": "An urgent 'CFO' message asks Anita (finance) to pay a new vendor ₹2.4L. The link is a lookalike domain, the invoice was edited in an image editor, and the session is a new device on a datacentre IP abroad at 3 AM. All context data is simulated.",
+  "simulated": true,
+  "event": {
+    "user_id": "anita",
+    "action": {
+      "type": "payment",
+      "amount": 240000,
+      "payee": "Sunrise Traders",
+      "payee_account_holder": "R K Enterprises"
+    },
+    "session": {
+      "ip": "185.220.101.14",
+      "ip_country": "RO",
+      "ip_is_vpn": true,
+      "ip_is_datacentre": true,
+      "device_id": "dev-9f3a-unknown",
+      "device_is_emulator": false,
+      "location_country": "IN",
+      "location_city": "Kochi",
+      "hour_local": 3,
+      "minutes_since_last_login": 480
+    },
+    "auth": {
+      "twofa": { "status": "passed", "method": "sms", "failed_attempts": 3 },
+      "biometric": { "match_score": 0.41, "liveness": false }
+    },
+    "evidence": {
+      "chat": {
+        "sender_claimed": "Rahul (CFO)",
+        "text": "Hi Anita, this is Rahul from the CFO office. I'm in a meeting and can't take calls. This is urgent - transfer Rs 2,40,000 to Sunrise Traders today, invoice attached. Please don't discuss this with anyone in the team, I'll explain later."
+      },
+      "url": {
+        "url": "https://acmecorp-pay.com/invoice/8841",
+        "claimed_org": "acmecorp"
+      },
+      "invoice": {
+        "vendor_name": "Sunrise Traders",
+        "account_holder": "R K Enterprises",
+        "creator_tool": "Adobe Photoshop 25.0",
+        "created_days_ago": 1,
+        "modified_days_ago": 0
+      }
+    }
+  },
+  "expected": {
+    "band": "verify",
+    "rationale": "Many independent categories agree: new device and datacentre IP, location mismatch, failed 2FA attempts, failed liveness, urgency and secrecy language, lookalike domain, edited invoice, vendor/account mismatch, first-time payee, large amount at 3 AM.",
+    "must_flag": ["url.lookalike_domain", "document.editing_tool", "document.vendor_account_mismatch", "text.secrecy", "device.new_device"],
+    "must_not_flag": []
+  }
+}

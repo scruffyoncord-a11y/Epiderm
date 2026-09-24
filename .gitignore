@@ -1,0 +1,11 @@
+# dependencies and build output
+node_modules/
+.next/
+__pycache__/
+.pytest_cache/
+*.tsbuildinfo
+# secrets and local config: never commit
+.env
+.env.*
+!.env.example
+.claude/

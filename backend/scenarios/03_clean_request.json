@@ -1,0 +1,54 @@
+{
+  "id": "clean_request",
+  "title": "Clean request: routine payment",
+  "description": "Anita pays a known vendor a normal amount from her usual laptop during working hours. Everything is consistent. All context data is simulated.",
+  "simulated": true,
+  "event": {
+    "user_id": "anita",
+    "action": {
+      "type": "payment",
+      "amount": 18000,
+      "payee": "Zenith Office Supplies",
+      "payee_account_holder": "Zenith Office Supplies"
+    },
+    "session": {
+      "ip": "103.21.58.40",
+      "ip_country": "IN",
+      "ip_is_vpn": false,
+      "ip_is_datacentre": false,
+      "device_id": "dev-anita-laptop",
+      "device_is_emulator": false,
+      "location_country": "IN",
+      "location_city": "Kochi",
+      "hour_local": 11,
+      "minutes_since_last_login": 60
+    },
+    "auth": {
+      "twofa": { "status": "passed", "method": "app", "failed_attempts": 0 },
+      "biometric": { "match_score": 0.95, "liveness": true }
+    },
+    "evidence": {
+      "chat": {
+        "sender_claimed": "Anita (self)",
+        "text": "Monthly stationery invoice from Zenith, paying as usual."
+      },
+      "url": {
+        "url": "https://acmecorp.com/portal/invoices/2290",
+        "claimed_org": "acmecorp"
+      },
+      "invoice": {
+        "vendor_name": "Zenith Office Supplies",
+        "account_holder": "Zenith Office Supplies",
+        "creator_tool": "Tally Prime",
+        "created_days_ago": 5,
+        "modified_days_ago": 5
+      }
+    }
+  },
+  "expected": {
+    "band": "allow",
+    "rationale": "No inconsistencies and a normal pattern: known device, usual country and hours, known payee, normal amount, official domain, genuine invoice.",
+    "must_flag": [],
+    "must_not_flag": ["url.lookalike_domain", "document.editing_tool", "device.new_device", "location.new_country", "text.secrecy"]
+  }
+}
