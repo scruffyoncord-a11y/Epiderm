@@ -96,17 +96,20 @@ def analyze(scenario_id: str) -> Analysis:
 
 
 class TextRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=MAX_CHARS)
-    ip: Optional[str] = Field(default=None, max_length=64, description="IP the message came from, if known")
+    text: str = Field(default="", max_length=MAX_CHARS)
+    headers: Optional[str] = Field(default=None, max_length=60_000, description="Pasted email headers or Gmail Show-original summary")
+    sender_email: Optional[str] = Field(default=None, max_length=254, description="Address the message came from, if known")
+    organisation: Optional[str] = Field(default=None, max_length=120, description="Company the sender claims to be from, if known")
 
 
 @app.post("/analyze-text")
 def analyze_free_text(req: TextRequest) -> Analysis:
     """Free-text analysis: reasoning model first (when configured), then the rule-based check, then scoring.
     Text-only: no device, IP or link data."""
-    if not req.text.strip():
-        raise HTTPException(422, "text is empty")
-    return analyze_with_reasoning(req.text, ip=req.ip)
+    if not req.text.strip() and not (req.headers and req.headers.strip()):
+        raise HTTPException(422, "give the message text, the email headers, or both")
+    return analyze_with_reasoning(req.text, sender_email=req.sender_email,
+                                 organisation=req.organisation, use_cache=True, headers=req.headers)
 
 
 @app.get("/config")

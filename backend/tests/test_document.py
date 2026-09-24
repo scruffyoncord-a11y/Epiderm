@@ -218,3 +218,60 @@ def test_endpoint_upload_and_limits():
     assert client.post("/analyze-document", files={"file": ("e.pdf", b"", "application/pdf")}).status_code == 422
     big = b"%PDF-" + b"0" * (MAX_BYTES + 10)
     assert client.post("/analyze-document", files={"file": ("big.pdf", big, "application/pdf")}).status_code == 413
+
+
+# ------------------------------------------------------------------ AI-generation markers in images
+
+def make_png(text_chunks: dict | None = None) -> bytes:
+    from PIL.PngImagePlugin import PngInfo
+    info = PngInfo()
+    for k, v in (text_chunks or {}).items():
+        info.add_text(k, v)
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16), "white").save(buf, "PNG", pnginfo=info)
+    return buf.getvalue()
+
+
+def test_png_with_image_generator_settings_is_flagged():
+    data = make_png({"parameters": "a red fox, Steps: 20, Sampler: Euler a, CFG scale: 7"})
+    r = analyze_document(data, "fox.png", now=NOW)
+    assert "ai_generated_marker" in ids(r, SUS)
+    assert "'parameters'" in next(s for s in r.signals if s.id == "document.ai_generated_marker").evidence
+
+
+def test_image_naming_an_ai_tool_is_flagged():
+    r = analyze_document(make_jpeg("Midjourney v6"), "portrait.jpg", now=NOW)
+    assert "ai_generated_marker" in ids(r, SUS)
+
+
+def test_image_declaring_itself_ai_generated_in_content_credentials_is_flagged():
+    data = make_jpeg("Camera app") + b"<Iptc4xmpExt:DigitalSourceType>trainedAlgorithmicMedia</Iptc4xmpExt:DigitalSourceType>"
+    assert "ai_generated_marker" in ids(analyze_document(data, "x.jpg", now=NOW), SUS)
+
+
+def test_content_credentials_alone_are_informational_not_suspicious():
+    data = make_jpeg("Camera app") + b"jumb c2pa manifest"
+    r = analyze_document(data, "x.jpg", now=NOW)
+    assert "content_credentials" in ids(r) and "ai_generated_marker" not in ids(r)
+    assert ids(r, SUS) - {"recently_created"} == set()
+
+
+def test_a_plain_photo_gets_no_ai_flag_and_the_limits_are_stated():
+    r = analyze_document(make_jpeg(None), "photo.jpg", now=NOW)
+    assert "ai_generated_marker" not in ids(r)
+    assert any("AI-generated or a deepfake" in c and "does not mean the image is real" in c for c in r.could_not_check)
+    pdf = analyze_document(make_pdf({"/Producer": "Tally Prime"}), "x.pdf", now=NOW)
+    assert not any("deepfake" in c for c in pdf.could_not_check)
+
+
+def test_innocent_words_in_a_description_do_not_trigger_the_ai_flag():
+    data = make_png({"Description": "A plane on the runway at dawn, under the Gemini constellation", "Title": "Flux of travellers"})
+    assert "ai_generated_marker" not in ids(analyze_document(data, "airport.png", now=NOW))
+    data = make_png({"Software": "Stable Diffusion WebUI"})
+    assert "ai_generated_marker" in ids(analyze_document(data, "gen.png", now=NOW), SUS)
+
+
+def test_a_png_with_text_chunks_is_not_reported_as_having_no_metadata():
+    r = analyze_document(make_png({"parameters": "Steps: 20, Sampler: Euler"}), "x.png", now=NOW)
+    assert "no_metadata" not in ids(r) and "ai_generated_marker" in ids(r, SUS)
+    assert "no_metadata" in ids(analyze_document(make_png(), "plain.png", now=NOW), Direction.unknown)

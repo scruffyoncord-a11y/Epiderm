@@ -83,7 +83,8 @@ def classify(ptr: str) -> str:
     return "unknown"
 
 
-def analyze_ip(ip_text: str, resolver: Optional[Resolver] = None) -> IpResult:
+def analyze_ip(ip_text: str, resolver: Optional[Resolver] = None, context: str = "sender") -> IpResult:
+    """context="mail" judges a sending mail server (hosting names are normal there); "sender" judges a person's connection."""
     ip_text = (ip_text or "").strip()
     try:
         addr = ipaddress.ip_address(ip_text)
@@ -98,6 +99,10 @@ def analyze_ip(ip_text: str, resolver: Optional[Resolver] = None) -> IpResult:
 
     resolver = resolver or SocketResolver()
     ptr = resolver.reverse(str(addr))
+    if not ptr and context == "mail":
+        return IpResult(ip=str(addr), signals=[_sig(
+            "ip.mail_no_rdns", "The sending mail server has no reverse DNS record, which legitimate mail servers almost always have",
+            Direction.suspicious, 0.3, 0.5, str(addr))])
     if not ptr:
         return IpResult(ip=str(addr), signals=[_sig(
             "ip.rdns_missing", "No reverse DNS record (common, and not suspicious on its own)", Direction.unknown,
@@ -107,7 +112,14 @@ def analyze_ip(ip_text: str, resolver: Optional[Resolver] = None) -> IpResult:
     kind = classify(ptr)
     signals: list[Signal] = []
 
-    if kind == "anonymiser":
+    if context == "mail" and kind in ("hosting", "residential", "unknown"):
+        if kind == "residential":
+            signals.append(_sig("ip.mail_from_home", "The mail came straight from what looks like a home or mobile connection, "
+                                "which legitimate companies do not send from", Direction.suspicious, 0.4, 0.5, f"{addr} -> {ptr}"))
+        else:
+            signals.append(_sig("ip.mail_server_named", f"The sending server is {ptr}, which is normal for email",
+                                Direction.neutral, 0.0, 0.5, f"{addr} -> {ptr}"))
+    elif kind == "anonymiser":
         signals.append(_sig("ip.rdns_anonymiser", "Reverse DNS points to a VPN, proxy or Tor exit",
                             Direction.suspicious, 0.6, 0.7, f"{addr} -> {ptr}"))
     elif kind == "hosting":
@@ -121,7 +133,7 @@ def analyze_ip(ip_text: str, resolver: Optional[Resolver] = None) -> IpResult:
                             Direction.neutral, 0.0, 0.5, f"{addr} -> {ptr}"))
 
     if not confirmed:
-        signals.append(_sig("ip.rdns_unconfirmed",
+        signals.append(_sig("ip.rdns_unconfirmed" if context != "mail" else "ip.mail_rdns_unconfirmed",
                             "The reverse DNS name does not resolve back to this IP (names can be set by whoever controls the IP)",
                             Direction.suspicious, 0.3, 0.5, f"{ptr} does not resolve to {addr}"))
     return IpResult(ip=str(addr), ptr=ptr, forward_confirmed=confirmed, kind=kind, signals=signals)

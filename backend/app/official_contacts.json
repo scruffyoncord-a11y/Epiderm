@@ -1,0 +1,17 @@
+{
+  "_notice": "Team-curated list of official email domains, for the MVP. It is NOT exhaustive and may be out of date: always confirm on the company's own website. Add a company only after checking its official site. The AI never supplies entries for this list.",
+  "organisations": [
+    {"name": "Acme Corp (demo)", "aliases": ["acme", "acmecorp", "acme corp", "acme corporation"], "domains": ["acmecorp.com"], "site": "https://acmecorp.com", "kind": "company"},
+    {"name": "Amazon", "aliases": ["amazon", "amazon india", "amazon pay"], "domains": ["amazon.in", "amazon.com"], "site": "https://www.amazon.in", "kind": "company"},
+    {"name": "Flipkart", "aliases": ["flipkart"], "domains": ["flipkart.com"], "site": "https://www.flipkart.com", "kind": "company"},
+    {"name": "Paytm", "aliases": ["paytm"], "domains": ["paytm.com"], "site": "https://paytm.com", "kind": "company"},
+    {"name": "Google", "aliases": ["google"], "domains": ["google.com"], "site": "https://www.google.com", "kind": "company"},
+    {"name": "Microsoft", "aliases": ["microsoft"], "domains": ["microsoft.com"], "site": "https://www.microsoft.com", "kind": "company"},
+    {"name": "HDFC Bank", "aliases": ["hdfc", "hdfc bank"], "domains": ["hdfcbank.com"], "site": "https://www.hdfcbank.com", "kind": "bank"},
+    {"name": "ICICI Bank", "aliases": ["icici", "icici bank"], "domains": ["icicibank.com"], "site": "https://www.icicibank.com", "kind": "bank"},
+    {"name": "Axis Bank", "aliases": ["axis", "axis bank"], "domains": ["axisbank.com"], "site": "https://www.axisbank.com", "kind": "bank"},
+    {"name": "State Bank of India", "aliases": ["sbi", "state bank of india", "state bank"], "domains": ["sbi.co.in"], "site": "https://sbi.co.in", "kind": "bank"},
+    {"name": "Reserve Bank of India", "aliases": ["rbi", "reserve bank of india", "reserve bank"], "domains": ["rbi.org.in"], "site": "https://www.rbi.org.in", "kind": "government"},
+    {"name": "Income Tax Department", "aliases": ["income tax", "income tax department", "it department"], "domains": ["incometax.gov.in"], "site": "https://www.incometax.gov.in", "kind": "government"}
+  ]
+}

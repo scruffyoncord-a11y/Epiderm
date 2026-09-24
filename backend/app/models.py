@@ -26,6 +26,7 @@ class Category(str, Enum):
     url = "url"
     document = "document"
     biometric = "biometric"
+    email = "email"
 
 
 class Band(str, Enum):
@@ -154,6 +155,32 @@ class Scenario(BaseModel):
 
 # ----------------------------------------------------------------- analysis output
 
+class HeaderSummary(BaseModel):
+    """The few header fields we show back. The recipient's own address and the raw headers are never returned."""
+    from_display: str = ""
+    from_email: Optional[str] = None
+    reply_to: Optional[str] = None
+    subject: str = ""
+    spf: Optional[str] = None
+    dkim: Optional[str] = None
+    dmarc: Optional[str] = None
+    sending_ip: Optional[str] = None
+    sending_host: Optional[str] = None
+
+
+class OfficialContact(BaseModel):
+    """What our curated directory has on record for a company. Not from a language model."""
+    organisation: str
+    domains: list[str]
+    site: str
+    kind: str = "company"
+
+
+class FollowUp(BaseModel):
+    id: str = Field(description="sender_email | organisation")
+    question: str
+
+
 class DocumentReport(BaseModel):
     filename: str
     format: str = Field(description="pdf | docx | xlsx | pptx | image | unknown")
@@ -194,4 +221,7 @@ class Analysis(BaseModel):
     verification_steps: list[str] = Field(default_factory=list)
     summary: str = ""
     reasoning: Optional[ReasoningInfo] = None
+    official_contact: Optional[OfficialContact] = None
+    header_summary: Optional[HeaderSummary] = None
+    follow_ups: list[FollowUp] = Field(default_factory=list)
     is_placeholder: bool = Field(default=False, description="True while results are hand-written stand-ins, not engine output")

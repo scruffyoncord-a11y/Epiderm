@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Band, Check, CheckResult, Direction, Reasoning, Signal } from "./types";
+import type { Band, Check, CheckResult, Direction, FollowUp, HeaderSummary, OfficialContact, Reasoning, Signal } from "./types";
 
 const BAND: Record<Band, { label: string; headline: string; box: string; chip: string }> = {
   allow: {
@@ -256,6 +256,148 @@ export function ReasoningCard({ r }: { r: Reasoning }) {
         </div>
       )}
       <p className="mt-3 text-xs text-zinc-500">{r.note}</p>
+    </Card>
+  );
+}
+
+export function OfficialContactCard({ c }: { c: OfficialContact }) {
+  return (
+    <Card title={`On record for ${c.organisation}`}>
+      <p className="text-sm">
+        Official email domain{c.domains.length > 1 ? "s" : ""}: <strong>{c.domains.join(", ")}</strong>
+      </p>
+      <p className="mt-1 text-sm">
+        Official site:{" "}
+        <a href={c.site} target="_blank" rel="noopener noreferrer" className="underline">
+          {c.site}
+        </a>
+      </p>
+      <p className="mt-2 text-xs text-zinc-500">
+        Open the official site yourself and use the contact details there, never those in the message. This short list is
+        curated by the team, not by the AI, and may be out of date.
+      </p>
+    </Card>
+  );
+}
+
+export function FollowUpCard({ items, onSubmit, busy }: { items: FollowUp[]; onSubmit: (v: { email?: string; org?: string }) => void; busy: boolean }) {
+  const [email, setEmail] = useState("");
+  const [org, setOrg] = useState("");
+  const wantsEmail = items.some((i) => i.id === "sender_email");
+  const wantsOrg = items.some((i) => i.id === "organisation");
+  const ready = (wantsEmail && email.trim()) || (wantsOrg && org.trim());
+  return (
+    <Card title="One more thing that would help">
+      <ul className="space-y-1 text-sm">
+        {items.map((i) => (
+          <li key={i.id}>{i.question}</li>
+        ))}
+      </ul>
+      <form
+        className="mt-3 flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ready) onSubmit({ email: email.trim() || undefined, org: org.trim() || undefined });
+        }}
+      >
+        {wantsEmail && (
+          <div>
+            <label htmlFor="fu-email" className="block text-xs text-zinc-500">Sender&apos;s email address</label>
+            <input
+              id="fu-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              maxLength={254}
+              placeholder="name@gmail.com"
+              className="mt-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-700"
+            />
+          </div>
+        )}
+        {wantsOrg && (
+          <div>
+            <label htmlFor="fu-org" className="block text-xs text-zinc-500">Company they claim to be from</label>
+            <input
+              id="fu-org"
+              type="text"
+              value={org}
+              onChange={(e) => setOrg(e.target.value)}
+              maxLength={120}
+              placeholder="e.g. Acme Corp"
+              className="mt-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-700"
+            />
+          </div>
+        )}
+        <button
+          type="submit"
+          disabled={!ready || busy}
+          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+        >
+          {busy ? "Re-checking…" : "Re-check"}
+        </button>
+      </form>
+      <p className="mt-2 text-xs text-zinc-500">The message is not read again from scratch, so this is quick.</p>
+    </Card>
+  );
+}
+
+const AUTH_STYLE = (v: string | null) =>
+  v === "pass" || v === "bestguesspass"
+    ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-100"
+    : v === "fail" || v === "permerror" || v === "softfail"
+      ? "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100"
+      : "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200";
+
+export function HeaderCard({ h }: { h: HeaderSummary }) {
+  return (
+    <Card title="What the email headers say">
+      <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+        {(h.from_display || h.from_email) && (
+          <div>
+            <dt className="text-xs text-zinc-500">Sent from</dt>
+            <dd className="break-words">
+              {h.from_display ? `${h.from_display} ` : ""}
+              {h.from_email ? `<${h.from_email}>` : ""}
+            </dd>
+          </div>
+        )}
+        {h.reply_to && (
+          <div>
+            <dt className="text-xs text-zinc-500">Replies go to</dt>
+            <dd className="break-words">{h.reply_to}</dd>
+          </div>
+        )}
+        {h.subject && (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-zinc-500">Subject</dt>
+            <dd className="break-words">{h.subject}</dd>
+          </div>
+        )}
+        {h.sending_ip && (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-zinc-500">Sending mail server</dt>
+            <dd className="break-words">
+              {h.sending_ip}
+              {h.sending_host ? ` (${h.sending_host})` : ""}
+            </dd>
+          </div>
+        )}
+      </dl>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs" aria-label="Sender authentication results">
+        {(["SPF", "DKIM", "DMARC"] as const).map((k) => {
+          const v = h[k.toLowerCase() as "spf" | "dkim" | "dmarc"];
+          return (
+            <span key={k} className={`rounded px-2 py-0.5 font-medium ${AUTH_STYLE(v)}`}>
+              {k}: {v ?? "not found"}
+            </span>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs text-zinc-500">
+        SPF, DKIM and DMARC are the receiving mail service&apos;s own check that the sender was allowed to send for that
+        domain. Passing does not prove the content is honest, because a scammer&apos;s own domain passes too. Only these fields
+        are shown; your own address and the rest of the headers are discarded.
+      </p>
     </Card>
   );
 }

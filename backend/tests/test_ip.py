@@ -92,10 +92,13 @@ def test_a_hosting_ip_alone_cannot_hold_a_genuine_message():
     assert a.band == Band.allow
 
 
-def test_endpoint_accepts_optional_ip(monkeypatch):
+def test_endpoint_finds_the_ip_from_headers_and_no_longer_accepts_one_directly(monkeypatch):
     import app.reasoning as r
-    monkeypatch.setattr(r, "analyze_ip", lambda ip, resolver=None: analyze_ip(ip, FakeResolver("tor-exit-1.example.org", [ip])))
-    body = client.post("/analyze-text", json={"text": "hello there", "ip": "185.220.101.14"}).json()
+    monkeypatch.setattr(r, "analyze_ip", lambda ip, resolver=None, **kw: analyze_ip(ip, FakeResolver("tor-exit-1.example.org", [ip]), **kw))
+    headers = "Received: from x (x.example [185.220.101.14]) by mx.example.com\nFrom: someone@example.org\n"
+    body = client.post("/analyze-text", json={"text": "hello there", "headers": headers}).json()
     assert any(s["id"] == "ip.rdns_anonymiser" for s in body["signals"])
-    assert client.post("/analyze-text", json={"text": "hello", "ip": "x" * 100}).status_code == 422
-    assert client.post("/analyze-text", json={"text": "hello", "ip": "not-an-ip"}).status_code == 200
+    assert body["header_summary"]["sending_ip"] == "185.220.101.14"
+    # a stray "ip" field in a request is simply ignored, never used
+    ignored = client.post("/analyze-text", json={"text": "hello", "ip": "185.220.101.14"}).json()
+    assert not any(s["id"].startswith("ip.") for s in ignored["signals"])

@@ -30,6 +30,21 @@ export type Reasoning = {
   unknowns: string[];
 };
 
+export type HeaderSummary = {
+  from_display: string;
+  from_email: string | null;
+  reply_to: string | null;
+  subject: string;
+  spf: string | null;
+  dkim: string | null;
+  dmarc: string | null;
+  sending_ip: string | null;
+  sending_host: string | null;
+};
+
+export type OfficialContact = { organisation: string; domains: string[]; site: string; kind: string };
+export type FollowUp = { id: "sender_email" | "organisation"; question: string };
+
 export type Config = { reasoning_enabled: boolean; provider: "gemini" | "anthropic" | "ollama" | null; model: string | null; local: boolean };
 
 export type Analysis = {
@@ -46,6 +61,9 @@ export type Analysis = {
   verification_steps: string[];
   summary: string;
   reasoning: Reasoning | null;
+  official_contact: OfficialContact | null;
+  header_summary: HeaderSummary | null;
+  follow_ups: FollowUp[];
   is_placeholder: boolean;
 };
 

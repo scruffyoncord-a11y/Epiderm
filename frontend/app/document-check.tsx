@@ -3,11 +3,30 @@
 import { useState } from "react";
 import { Card, SignalList } from "./components";
 import type { DocumentReport } from "./types";
+import { Waiting } from "./waiting";
 
 const MAX_BYTES = 10 * 1024 * 1024;
-const ACCEPT = ".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png";
+const DEFAULT_ACCEPT = ".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png";
 
-export function DocumentCheck({ apiBase }: { apiBase: string }) {
+type Props = {
+  apiBase: string;
+  heading?: string;
+  intro?: string;
+  accept?: string;
+  fileLabel?: string;
+  showVendor?: boolean;
+  buttonLabel?: string;
+};
+
+export function DocumentCheck({
+  apiBase,
+  heading = "Check a document",
+  intro = "Upload an invoice, letter or photo of one. TrustGuard reads what the file says about itself: which program made it, when, whether it was saved again afterwards. The file is read in memory and never stored.",
+  accept = DEFAULT_ACCEPT,
+  fileLabel = "File (PDF, Word, Excel, PowerPoint, JPG or PNG, up to 10 MB)",
+  showVendor = true,
+  buttonLabel = "Check document",
+}: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [vendor, setVendor] = useState("");
   const [report, setReport] = useState<DocumentReport | null>(null);
@@ -44,28 +63,26 @@ export function DocumentCheck({ apiBase }: { apiBase: string }) {
   }
 
   return (
-    <section className="mt-8" aria-labelledby="doc-label">
+    <section aria-labelledby="doc-label">
       <h2 id="doc-label" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-        2. Check a document (optional)
+        {heading}
       </h2>
-      <p className="mt-2 text-sm text-zinc-500">
-        Upload an invoice, letter or photo of one. TrustGuard reads what the file says about itself: which program made
-        it, when, whether it was saved again afterwards. The file is read in memory and never stored.
-      </p>
+      <p className="mt-2 text-sm text-zinc-500">{intro}</p>
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <div>
           <label htmlFor="doc-file" className="block text-sm text-zinc-500">
-            File (PDF, Word, Excel, PowerPoint, JPG or PNG, up to 10 MB)
+            {fileLabel}
           </label>
           <input
             id="doc-file"
             type="file"
-            accept={ACCEPT}
+            accept={accept}
             onChange={(e) => pick(e.target.files?.[0] ?? null)}
             className="mt-1 block text-sm"
           />
         </div>
+        {showVendor && (
         <div>
           <label htmlFor="doc-vendor" className="block text-sm text-zinc-500">
             Vendor name on the invoice (optional)
@@ -80,15 +97,18 @@ export function DocumentCheck({ apiBase }: { apiBase: string }) {
             className="mt-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-700"
           />
         </div>
+        )}
         <button
           type="button"
           onClick={run}
           disabled={!file || loading}
           className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
         >
-          {loading ? "Reading…" : "Check document"}
+          {loading ? "Reading…" : buttonLabel}
         </button>
       </div>
+
+      {loading && <Waiting label="Reading the file details…" note="This is usually quick." />}
 
       {error && (
         <p className="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
