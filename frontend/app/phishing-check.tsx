@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Card, Checklist, ChecksList, DecisionBanner, FollowUpCard, HeaderCard, HighlightedChat, OfficialContactCard, ReasoningCard, SignalList, TrustBar,
 } from "./components";
+import { AnalysisOverlay } from "./analysis-overlay";
 import { API } from "./lib";
-import { Waiting } from "./waiting";
-import type { Analysis, Config, ScenarioDetail, ScenarioSummary } from "./types";
+import type { Analysis, Config } from "./types";
 
 const MAX_CHARS = 5000;
 
-async function api<T>(path: string, init?: { method: string; body?: unknown }): Promise<T> {
+async function api<T>(path: string, init?: { method: string; body?: unknown; sessionId?: string | null }): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method: init?.method ?? "GET",
-    headers: init?.body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(init?.sessionId ? { "X-Session-Id": init.sessionId } : {}),
+    },
     body: init?.body ? JSON.stringify(init.body) : undefined,
   });
   if (!res.ok) throw new Error(`${path} returned ${res.status}`);
@@ -24,87 +27,138 @@ type Result = {
   analysis: Analysis;
   text: string;
   sender: string;
-  action: ScenarioDetail["event"]["action"] | null;
-  mode: "example" | "text";
 };
 
-export function PhishingCheck() {
-  const [examples, setExamples] = useState<ScenarioSummary[]>([]);
+type Stage = "started" | "container" | "reading" | "verifying";
+type StreamEvent =
+  | { stage: Stage }
+  | { stage: "done"; result: Analysis }
+  | { stage: "error"; detail: string };
+type PlanStep = { key: Stage; label: string; detail: string };
+
+/** The steps this particular check will really go through. Each maps to a stage the server reports. */
+function buildPlan(o: { container: boolean; ownContainer: boolean; model: boolean; local: boolean }): PlanStep[] {
+  const plan: PlanStep[] = [{ key: "started", label: "Request received", detail: "Your check is on its way" }];
+  if (o.container) {
+    plan.push({
+      key: "container",
+      label: o.ownContainer ? "Reading headers in your container" : "Opening a private container",
+      detail: "No network, and deleted afterwards",
+    });
+  }
+  if (o.model) {
+    plan.push({
+      key: "reading",
+      label: "Reading the context",
+      detail: o.local ? "A model on this computer is reading your text" : "The reasoning model is reading your text",
+    });
+  }
+  plan.push({ key: "verifying", label: "Verifying the evidence", detail: "Running the rules and the sender checks" });
+  return plan;
+}
+
+export function PhishingCheck({ sessionId }: { sessionId: string | null }) {
   const [text, setText] = useState("");
   const [headers, setHeaders] = useState("");
   const [email, setEmail] = useState("");
   const [org, setOrg] = useState("");
-  const [exampleId, setExampleId] = useState<string | null>(null);
-  const [exampleText, setExampleText] = useState("");
   const [result, setResult] = useState<Result | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
+  const [running, setRunning] = useState(false);
+  const [plan, setPlan] = useState<PlanStep[]>([]);
+  const [stage, setStage] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const pendingRef = useRef<Result | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api<Config>("/config").then(setConfig).catch(() => setConfig(null));
-    api<ScenarioSummary[]>("/scenarios")
-      .then(setExamples)
-      .catch((e: Error) => setError(`Cannot reach the API at ${API}: ${e.message}`));
+    api<Config>("/config")
+      .then(setConfig)
+      .catch(() => setError(`Cannot reach the API at ${API}. Is the backend running?`));
   }, []);
 
-  async function loadExample(id: string) {
-    setError(null);
-    setResult(null);
-    try {
-      const d = await api<ScenarioDetail>(`/scenarios/${id}`);
-      const msg = d.event.evidence.chat?.text ?? "";
-      setText(msg);
-      setExampleText(msg);
-      setExampleId(id);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  function onEdit(value: string) {
-    setText(value);
-    if (exampleId && value !== exampleText) setExampleId(null); // edited: no longer the saved example
-  }
-
+  /** Runs the check and follows the server's real progress; the result is held until the overlay has finished. */
   async function run(over?: { email?: string; org?: string }) {
     if (!text.trim() && !headers.trim()) return;
     if (over?.email !== undefined) setEmail(over.email);
     if (over?.org !== undefined) setOrg(over.org);
-    setLoading(true);
+    const nextPlan = buildPlan({
+      container: !!headers.trim() && (!!sessionId || config?.sandbox?.mode === "container"),
+      ownContainer: !!sessionId,
+      model: !!text.trim() && !!config?.reasoning_enabled,
+      local: !!config?.local,
+    });
+    pendingRef.current = null;
+    setResult(null);
     setError(null);
+    setPlan(nextPlan);
+    setStage(0);
+    setFinished(false);
+    setRunning(true);
     try {
-      if (exampleId && !headers.trim()) {
-        const [d, analysis] = await Promise.all([
-          api<ScenarioDetail>(`/scenarios/${exampleId}`),
-          api<Analysis>(`/analyze/${exampleId}`, { method: "POST" }),
-        ]);
-        setResult({
-          analysis,
-          text: d.event.evidence.chat?.text ?? text,
-          sender: d.event.evidence.chat?.sender_claimed ?? "Sender",
-          action: d.event.action,
-          mode: "example",
-        });
-      } else {
-        const analysis = await api<Analysis>("/analyze-text", { method: "POST", body: {
-            text,
-            headers: headers.trim() || null,
-            sender_email: (over?.email ?? email).trim() || null,
-            organisation: (over?.org ?? org).trim() || null,
-          },
-        });
-        setResult({ analysis, text, sender: "Message you entered", action: null, mode: "text" });
+      const res = await fetch(`${API}/analyze-text/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(sessionId ? { "X-Session-Id": sessionId } : {}) },
+        body: JSON.stringify({
+          text,
+          headers: headers.trim() || null,
+          sender_email: (over?.email ?? email).trim() || null,
+          organisation: (over?.org ?? org).trim() || null,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        throw new Error(res.status === 503 ? "The private container is required but is not available." : `The check failed (${res.status}).`);
       }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let gotResult = false;
+      let streamDone = false;
+      while (!streamDone) {
+        const chunk = await reader.read();
+        streamDone = chunk.done;
+        buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+        let newline = buffer.indexOf("\n");
+        while (newline >= 0) {
+          const line = buffer.slice(0, newline).trim();
+          buffer = buffer.slice(newline + 1);
+          newline = buffer.indexOf("\n");
+          if (!line) continue;
+          const event = JSON.parse(line) as StreamEvent;
+          if (event.stage === "error") throw new Error(event.detail);
+          if (event.stage === "done") {
+            pendingRef.current = { analysis: event.result, text, sender: "Message you entered" };
+            gotResult = true;
+            setFinished(true);
+          } else {
+            const index = nextPlan.findIndex((p) => p.key === event.stage);
+            if (index >= 0) setStage((current) => Math.max(current, index));
+          }
+        }
+      }
+      if (!gotResult) throw new Error("The check ended without a result.");
     } catch (e) {
       setError((e as Error).message);
-    } finally {
-      setLoading(false);
+      setRunning(false);
     }
   }
 
+  /** The overlay has finished its last slide and faded out: now the result appears. */
+  function onOverlayClosed() {
+    setResult(pendingRef.current);
+    setRunning(false);
+  }
+
+  // After the result appears, bring it into view (smoothly, unless the person asked for less motion).
+  useEffect(() => {
+    if (!result || running) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    resultsRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    resultsRef.current?.focus({ preventScroll: true });
+  }, [result, running]);
+
   const a = result?.analysis;
-  const current = examples.find((s) => s.id === exampleId);
 
   return (
     <div>
@@ -123,14 +177,13 @@ export function PhishingCheck() {
         <textarea
           id="scenario-text"
           value={text}
-          onChange={(e) => onEdit(e.target.value)}
+          onChange={(e) => setText(e.target.value)}
           maxLength={MAX_CHARS}
           rows={6}
           placeholder="e.g. Hi, this is Rahul from the CFO office. I'm in a meeting and can't take calls. Please transfer Rs 2,40,000 to this account today and don't tell anyone."
           className="mt-2 w-full rounded-lg border border-zinc-300 bg-transparent p-3 text-sm leading-relaxed dark:border-zinc-700"
         />
-        <div className="mt-1 flex justify-between text-xs text-zinc-500">
-          <span>{current ? `Loaded example: ${current.title}` : "Custom text"}</span>
+        <div className="mt-1 flex justify-end text-xs text-zinc-500">
           <span>
             {text.length}/{MAX_CHARS}
           </span>
@@ -198,51 +251,24 @@ export function PhishingCheck() {
           email domains on record for the company.
         </p>
 
-        <div className="mt-4">
-          <p className="text-xs text-zinc-500">Or try an example:</p>
-          <div className="mt-1 flex flex-wrap gap-2" role="group" aria-label="Examples">
-            {examples.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                aria-pressed={exampleId === s.id}
-                onClick={() => loadExample(s.id)}
-                className={`rounded-full border px-3 py-1 text-xs transition ${
-                  exampleId === s.id
-                    ? "border-zinc-900 bg-zinc-100 dark:border-zinc-100 dark:bg-zinc-800"
-                    : "border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-                }`}
-              >
-                {s.title}
-              </button>
-            ))}
-          </div>
-          {current && <p className="mt-2 text-sm text-zinc-500">{current.description}</p>}
-        </div>
-
         <button
           type="button"
           onClick={() => run()}
-          disabled={(!text.trim() && !headers.trim()) || loading}
+          disabled={(!text.trim() && !headers.trim()) || running}
           className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
         >
-          {loading ? "Analysing…" : "Analyse"}
+          {running ? "Analysing…" : "Analyse"}
         </button>
-        {loading && (
-          <Waiting
-            label="Reading context…"
-            note={
-              exampleId
-                ? undefined
-                : config?.reasoning_enabled
-                  ? config.local
-                    ? "A model on this computer is reading your text. This can take a minute or more."
-                    : "The reasoning model is reading your text. This usually takes a few seconds."
-                  : undefined
-            }
-          />
-        )}
       </section>
+
+      {running && (
+        <AnalysisOverlay
+          steps={plan.map(({ label, detail }) => ({ label, detail }))}
+          stage={stage}
+          finished={finished}
+          onClosed={onOverlayClosed}
+        />
+      )}
 
       {error && (
         <p className="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
@@ -251,30 +277,21 @@ export function PhishingCheck() {
       )}
 
       {result && a && (
-        <div className="mt-6 space-y-4">
+        <div ref={resultsRef} tabIndex={-1} className="mt-6 scroll-mt-4 space-y-4 outline-none">
           <p className="text-xs text-zinc-500">
-            {result.mode === "example"
-              ? "Full example with simulated device, IP and location data. Results are placeholders until the engine is finished."
-              : "Text-only check: a real rule-based review of the wording. Device, IP, location, links and documents were not checked."}
+            Checked: the wording, and the email headers and sender address if you gave them. Not checked: links,
+            attachments, and the person&apos;s device or location.
           </p>
 
-          {result.mode === "text" && a.reasoning && <ReasoningCard r={a.reasoning} />}
+          {a.reasoning && <ReasoningCard r={a.reasoning} />}
 
           <DecisionBanner band={a.band} summary={a.summary} placeholder={a.is_placeholder} />
 
-          {result.mode === "text" && a.follow_ups.length > 0 && (
-            <FollowUpCard items={a.follow_ups} busy={loading} onSubmit={(v) => run(v)} />
+          {a.follow_ups.length > 0 && (
+            <FollowUpCard items={a.follow_ups} busy={running} onSubmit={(v) => run(v)} />
           )}
 
-          {result.action && (
-            <p className="text-sm text-zinc-500">
-              Requested action: <strong className="text-inherit">{result.action.type}</strong>
-              {result.action.amount != null && <> of Rs {result.action.amount.toLocaleString("en-IN")}</>}
-              {result.action.payee && <> to {result.action.payee}</>}
-            </p>
-          )}
-
-          {a.header_summary && <HeaderCard h={a.header_summary} />}
+          {a.header_summary && <HeaderCard h={a.header_summary} isolation={a.isolation} />}
 
           <Card title="Trust score">
             <TrustBar score={a.trust_score} low={a.trust_low} high={a.trust_high} required={a.required_trust} />
@@ -317,8 +334,9 @@ export function PhishingCheck() {
 
           <Card title="Privacy">
             <p className="text-sm text-zinc-500">
-              Example session data (IP, device, location) is simulated. In real use TrustGuard would keep only hashes and
-              summaries, ask consent before enrolling a face or voice, and delete uploads after the session.
+              Nothing you paste is saved to disk. The app keeps a short-lived copy of the model&apos;s reading in memory so a
+              re-check is quick, and it disappears when the server restarts. Email headers are read by this app&apos;s own code,
+              and only the fields shown above are kept on screen.
             </p>
           </Card>
         </div>

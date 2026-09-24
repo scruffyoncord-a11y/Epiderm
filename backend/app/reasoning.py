@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 from collections import OrderedDict
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
 
 import requests
 from pydantic import BaseModel, Field
@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from .analyzers.email import (
     IDENTITY_CLAIM, OFFICIALISH, analyze_sender, find_addresses, find_org_mention, load_directory, official_contact,
 )
-from .analyzers.headers import header_signals, parse_headers
+from .analyzers.headers import HeaderInfo, header_signals, parse_headers
 from .analyzers.ip import analyze_ip
 from .analyzers.text import MAX_CHARS, find_signals, score_signals
 from .models import Analysis, Category, Direction, FollowUp, HeaderSummary, ReasoningInfo, Signal
@@ -165,6 +165,7 @@ def merge_signals(text: str, rule_signals: list[Signal], assessment: Assessment,
     Quoted tactics can be verified against the text. Inconsistency claims cannot, so a small
     local model's are shown as advisory only (score_inconsistencies=False)."""
     by_id = {s.id: s for s in rule_signals}
+    rule_ids = set(by_id)  # agreement only counts against the fixed rules, never the model repeating itself
     dropped = 0
     injected = "text.injection" in by_id
 
@@ -177,8 +178,8 @@ def merge_signals(text: str, rule_signals: list[Signal], assessment: Assessment,
         if t.kind in RULE_KINDS:
             existing = by_id.get(sid)
             if existing is not None:
-                # two independent methods agree
-                existing.confidence = max(existing.confidence, AGREE_CONFIDENCE)
+                if sid in rule_ids:  # two independent methods agree
+                    existing.confidence = max(existing.confidence, AGREE_CONFIDENCE)
                 if span not in existing.spans:
                     existing.spans.append(span)
                 existing.evidence += f"; model: {t.why}"
@@ -437,14 +438,17 @@ def _with_ip_note(analysis: Analysis, ip_result) -> Analysis:
 def analyze_with_reasoning(text: str, client=None, provider: Optional[str] = None,
                            ip: Optional[str] = None, resolver=None,
                            sender_email: Optional[str] = None, organisation: Optional[str] = None,
-                           use_cache: bool = False, headers: Optional[str] = None) -> Analysis:
+                           use_cache: bool = False, headers: Optional[str] = None,
+                           header_info: Optional[HeaderInfo] = None,
+                           progress: Optional[Callable[[str], None]] = None) -> Analysis:
     """Reasoning model first, then the transparent rules, then one scored result.
 
     `client` (an Anthropic-style client) may be injected for tests; otherwise the provider is chosen
     from the environment.
     """
     text = text[:MAX_CHARS]
-    hdr = parse_headers(headers) if headers and headers.strip() else None
+    # header_info arrives already parsed when the sandbox did the parsing; otherwise parse here.
+    hdr = header_info if header_info is not None else (parse_headers(headers) if headers and headers.strip() else None)
     no_text = not text.strip()
     rule_signals = find_signals(text)
     ip_to_check, ip_context = (ip.strip() if ip and ip.strip() else None), "sender"
@@ -470,7 +474,12 @@ def analyze_with_reasoning(text: str, client=None, provider: Optional[str] = Non
     label = {"anthropic": model_name, "gemini": gemini_model_name, "ollama": local_model_name}.get(provider, lambda: None)()
     local = provider == "ollama"
 
+    def report(stage: str) -> None:
+        if progress is not None:
+            progress(stage)
+
     def fallback(status: str, note: str) -> Analysis:
+        report("verifying")
         flagged = any(x.direction == Direction.suspicious for x in rule_signals)
         sender_sigs, official, follow = _sender_part(text, sender_email, organisation, None, flagged, header_display)
         a = _with_ip_note(score_signals(text, rule_signals + sender_sigs), ip_result)
@@ -486,6 +495,7 @@ def analyze_with_reasoning(text: str, client=None, provider: Optional[str] = Non
                         "No reasoning model is available (set ANTHROPIC_API_KEY, or run Ollama with a local model). "
                         "Only the rule-based wording check ran.")
     cache_key = (provider, label, text)
+    report("reading")
     try:
         cached = _cache_get(cache_key) if use_cache else None
         if cached is not None:
@@ -503,6 +513,7 @@ def analyze_with_reasoning(text: str, client=None, provider: Optional[str] = Non
     if assessment is None:
         return fallback("failed", note)
 
+    report("verifying")
     signals, dropped = merge_signals(
         text, rule_signals, assessment, score_inconsistencies=provider == "anthropic",
         model_only_confidence={"ollama": LOCAL_MODEL_ONLY_CONFIDENCE, "gemini": GEMINI_MODEL_ONLY_CONFIDENCE}.get(

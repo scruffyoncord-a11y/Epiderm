@@ -39,7 +39,7 @@ def with_key(monkeypatch):
 
 def test_gemini_is_chosen_when_a_key_is_set_and_reported_as_not_local(with_key):
     cfg = TestClient(app).get("/config").json()
-    assert cfg == {"reasoning_enabled": True, "provider": "gemini", "model": "gemini-2.5-flash", "local": False}
+    assert {k: cfg[k] for k in ("reasoning_enabled", "provider", "model", "local")} == {"reasoning_enabled": True, "provider": "gemini", "model": "gemini-2.5-flash", "local": False}
     assert KEY not in json.dumps(cfg)
 
 

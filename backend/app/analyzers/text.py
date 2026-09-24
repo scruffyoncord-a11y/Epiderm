@@ -42,6 +42,11 @@ TACTICS: list[Tactic] = [
         r"\b(transfer|wire|send)\b[^.!?]{0,30}\b(money|amount|rs\.?|inr|₹|\$|funds)|"
         r"\bgift ?cards?\b|\bcrypto(currency)?\b|\bbitcoin\b|\bupi (id|pin)\b|\bnew (bank )?account\b|"
         r"\b(rs\.?|inr|₹)\s?\d[\d,]*")),
+    Tactic("text.changed_payment_details", "Announces changed payment details", 0.75, _rx(
+        r"\b(new|changed|updated|revised|different)\s+(bank|payment|banking|account|beneficiary)\s+(details|account|information|number|instructions)\b|"
+        r"\bwe\s+(have\s+)?(recently\s+)?(changed|updated|moved|switched)\s+(our\s+)?(bank|banking|account)\b|"
+        r"\b(ignore|disregard)\s+(the\s+)?(previous|old|earlier)\s+(bank|account|payment)\b|"
+        r"\bplease\s+(update|note)\s+(your\s+)?(records|payment\s+details|vendor\s+details)\b")),
     Tactic("text.credential_request", "Asks for a code or password", 0.9, _rx(
         r"\botp\b|\bone[- ]time (password|code)\b|\bverification code\b|\bpassword\b|\bcvv\b|\bpin\b|\bcard number\b")),
     Tactic("text.injection", "Tries to instruct the checking system", 0.9, _rx(

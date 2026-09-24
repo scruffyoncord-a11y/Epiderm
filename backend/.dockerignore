@@ -1,0 +1,10 @@
+# Never let secrets, tests, caches or local data into a build context.
+.env
+.env.*
+!.env.example
+tests/
+scenarios/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/

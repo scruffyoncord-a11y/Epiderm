@@ -1,24 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import type { Band, Check, CheckResult, Direction, FollowUp, HeaderSummary, OfficialContact, Reasoning, Signal } from "./types";
+import type { Band, Check, CheckResult, ContentReport, Direction, FollowUp, HeaderSummary, Identifier, OfficialContact, Reasoning, Signal } from "./types";
 
 const BAND: Record<Band, { label: string; headline: string; box: string; chip: string }> = {
   allow: {
     label: "Allow",
-    headline: "Consistent with this user's normal pattern",
+    headline: "Nothing unusual found",
     box: "border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100",
     chip: "bg-emerald-600 text-white",
   },
   step_up: {
     label: "Step-up check",
-    headline: "One extra check needed before this goes ahead",
+    headline: "Take a second look before you act",
     box: "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100",
     chip: "bg-amber-600 text-white",
   },
   verify: {
     label: "Verification required",
-    headline: "Hold this action and verify independently",
+    headline: "Hold this and verify independently",
     box: "border-red-300 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100",
     chip: "bg-red-600 text-white",
   },
@@ -348,7 +348,7 @@ const AUTH_STYLE = (v: string | null) =>
       ? "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100"
       : "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200";
 
-export function HeaderCard({ h }: { h: HeaderSummary }) {
+export function HeaderCard({ h, isolation }: { h: HeaderSummary; isolation?: string }) {
   return (
     <Card title="What the email headers say">
       <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
@@ -397,6 +397,121 @@ export function HeaderCard({ h }: { h: HeaderSummary }) {
         SPF, DKIM and DMARC are the receiving mail service&apos;s own check that the sender was allowed to send for that
         domain. Passing does not prove the content is honest, because a scammer&apos;s own domain passes too. Only these fields
         are shown; your own address and the rest of the headers are discarded.
+      </p>
+      <SandboxNote container={isolation === "container"} what="These headers were parsed" />
+    </Card>
+  );
+}
+
+/** Says plainly whether untrusted input was handled inside a private, throwaway container. */
+export function SandboxNote({ container, what }: { container: boolean; what: string }) {
+  return (
+    <p className="mt-2 flex items-start gap-2 text-xs text-zinc-500">
+      <span
+        className={`mt-0.5 inline-block size-2 shrink-0 rounded-full ${container ? "bg-emerald-500" : "bg-amber-500"}`}
+        aria-hidden
+      />
+      <span>
+        {container
+          ? `${what} inside a private, throwaway container: no network, read-only, limited memory, and deleted afterwards.`
+          : `${what} directly by the server, because no sandbox container is available. Start Docker Desktop and build the sandbox image to isolate it.`}
+      </span>
+    </p>
+  );
+}
+
+const CONCERN_LABEL: Record<string, string> = { low: "Low", medium: "Medium", high: "High" };
+
+function Field({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div>
+      <dt className="text-xs text-zinc-500">{label}</dt>
+      <dd className="break-words text-sm">{value}</dd>
+    </div>
+  );
+}
+
+/** What the reading model found in the document. Every value shown was found verbatim in the document. */
+export function DocumentReadingCard({ content }: { content: ContentReport }) {
+  const r = content.reading;
+  const f = content.facts;
+  if (!r || r.status !== "used" || !f) {
+    return (
+      <Card title="What the document says">
+        <p className="text-sm" role="status">
+          <strong>{r?.status === "failed" ? "The reading model could not be used." : "No reading model ran."}</strong>{" "}
+          {r?.note} Only the fixed checks below were applied to the contents.
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card title="What the document says" aside={<span className="text-xs text-zinc-500">read first · {r.model}{r.local ? " · on this computer" : ""}</span>}>
+      <p className="text-sm leading-relaxed">{r.summary}</p>
+      <dl className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-2">
+        <Field label="Looks like" value={f.document_type.replace(/_/g, " ")} />
+        <Field label="Issued by" value={f.issuer} />
+        <Field label="Addressed to" value={f.recipient} />
+        <Field label="Total" value={f.total_amount} />
+        <Field label="Pay to (account name)" value={f.account_holder} />
+        <Field label="Dates" value={f.dates.join(", ")} />
+        <Field label="Model's concern (advisory)" value={r.concern ? CONCERN_LABEL[r.concern] : null} />
+      </dl>
+      {f.payment_details.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-zinc-500">Payment details as written</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm">
+            {f.payment_details.map((d) => (
+              <li key={d}>{d}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {r.inconsistencies.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-zinc-500">Does not add up (the model&apos;s view, for information only)</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm">
+            {r.inconsistencies.map((d) => (
+              <li key={d}>{d}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="mt-3 text-xs text-zinc-500">{r.note}</p>
+    </Card>
+  );
+}
+
+function idStatus(i: Identifier): { text: string; cls: string } {
+  if (i.valid === false) return { text: "Impossible", cls: "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100" };
+  if (i.valid === true) return { text: "Passes its check", cls: "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200" };
+  return { text: "Not checkable", cls: "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200" };
+}
+
+/** Tax, bank and payment identifiers found in the document, with the result of their own check digits. */
+export function IdentifiersCard({ items }: { items: Identifier[] }) {
+  return (
+    <Card title="Identifiers in the document">
+      <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+        {items.map((i) => {
+          const st = idStatus(i);
+          return (
+            <li key={`${i.kind}-${i.value}`} className="flex items-start justify-between gap-3 py-2 text-sm">
+              <div className="min-w-0">
+                <p>
+                  <span className="font-medium">{i.kind}</span> <span className="break-all font-mono text-xs">{i.value}</span>
+                </p>
+                {i.note && <p className="text-xs text-zinc-500">{i.note}</p>}
+              </div>
+              <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${st.cls}`}>{st.text}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-xs text-zinc-500">
+        A check digit can prove a number is impossible, but not that it belongs to this vendor: anyone can compute a valid one.
+        Confirm ownership with the official registry or the vendor.
       </p>
     </Card>
   );

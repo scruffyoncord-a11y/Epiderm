@@ -45,7 +45,9 @@ export type HeaderSummary = {
 export type OfficialContact = { organisation: string; domains: string[]; site: string; kind: string };
 export type FollowUp = { id: "sender_email" | "organisation"; question: string };
 
-export type Config = { reasoning_enabled: boolean; provider: "gemini" | "anthropic" | "ollama" | null; model: string | null; local: boolean };
+export type SandboxStatus = { setting: string; mode: "container" | "none"; image_ready: boolean };
+
+export type Config = { reasoning_enabled: boolean; provider: "gemini" | "anthropic" | "ollama" | null; model: string | null; local: boolean; sandbox: SandboxStatus };
 
 export type Analysis = {
   scenario_id: string | null;
@@ -63,17 +65,32 @@ export type Analysis = {
   reasoning: Reasoning | null;
   official_contact: OfficialContact | null;
   header_summary: HeaderSummary | null;
+  isolation: string;
   follow_ups: FollowUp[];
   is_placeholder: boolean;
 };
 
-export type ScenarioSummary = { id: string; title: string; description: string; simulated: boolean };
-
-export type ScenarioDetail = ScenarioSummary & {
-  event: {
-    action: { type: string; amount: number | null; payee: string | null };
-    evidence: { chat: { sender_claimed: string; text: string } | null };
-  };
+export type Identifier = { kind: string; value: string; valid: boolean | null; note: string };
+export type DocumentFacts = {
+  document_type: string;
+  issuer: string | null;
+  recipient: string | null;
+  total_amount: string | null;
+  account_holder: string | null;
+  dates: string[];
+  payment_details: string[];
+};
+export type ContentReport = {
+  extracted: boolean;
+  characters: number;
+  truncated: boolean;
+  pages: number | null;
+  links: string[];
+  identifiers: Identifier[];
+  excerpt: string;
+  notes: string[];
+  reading: Reasoning | null;
+  facts: DocumentFacts | null;
 };
 
 export type DocumentReport = {
@@ -84,4 +101,8 @@ export type DocumentReport = {
   signals: Signal[];
   could_not_check: string[];
   summary: string;
+  isolation: string;
+  content: ContentReport | null;
+  band: Band | null;
+  verification_steps: string[];
 };

@@ -109,7 +109,9 @@ def test_refusal_falls_back():
 
 def test_config_endpoint_reports_honestly(monkeypatch):
     c = TestClient(app)
-    assert c.get("/config").json() == {"reasoning_enabled": False, "provider": None, "model": None, "local": False}
+    cfg0 = c.get("/config").json()
+    assert {k: cfg0[k] for k in ("reasoning_enabled", "provider", "model", "local")} == {"reasoning_enabled": False, "provider": None, "model": None, "local": False}
+    assert cfg0["sandbox"]["mode"] == "none"
     monkeypatch.setenv("TRUSTGUARD_PROVIDER", "auto")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
     cfg = c.get("/config").json()
@@ -191,3 +193,14 @@ def test_real_scam_is_still_held_when_the_local_model_adds_nothing(monkeypatch):
     monkeypatch.setattr(r, "_ask_ollama", lambda t: (assessment(concern=Concern.low), ""))
     a = analyze_with_reasoning(SCAM, provider="ollama")
     assert a.band == Band.verify
+
+
+def test_the_model_repeating_a_tactic_twice_is_not_two_methods_agreeing():
+    """Regression: the same kind reported twice by a small model was raised to the 'rules and model agree' confidence."""
+    text = "Hello, please send the report when you can. Thanks a lot, it means a lot to me."
+    fake = assessment(tactics=[
+        TacticFinding(kind=Kind.emotional_pressure, quote="it means a lot to me", why="guilt"),
+        TacticFinding(kind=Kind.emotional_pressure, quote="Thanks a lot", why="guilt again")])
+    a = analyze_with_reasoning(text, client=FakeClient(parsed=fake))
+    sig = next(s for s in a.signals if s.id == "text.emotional_pressure")
+    assert sig.confidence == 0.75  # model-only, once

@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+
+import Loader from "@/components/ui/loader-4";
+
 import { Card } from "./components";
 import { DocumentCheck } from "./document-check";
-import { API } from "./lib";
+import { API, closeSession, openSession } from "./lib";
 import { PhishingCheck } from "./phishing-check";
 
 type Category = "phishing" | "document" | "persona";
+type Session = { status: "idle" | "opening" | "ready" | "none"; id: string | null };
 
 const CATEGORIES: { id: Category; title: string; blurb: string; status: string; ready: boolean }[] = [
   {
@@ -32,13 +36,68 @@ const CATEGORIES: { id: Category; title: string; blurb: string; status: string; 
   },
 ];
 
+const MIN_OPENING_MS = 900; // long enough to read, so a fast start does not look like a glitch
+
 export default function Home() {
   const [category, setCategory] = useState<Category | null>(null);
+  const [session, setSession] = useState<Session>({ status: "idle", id: null });
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const sessionRef = useRef<string | null>(null);
+  const pickToken = useRef(0);
 
+  // Focus the heading after every screen change so keyboard and screen-reader users stay oriented.
   useEffect(() => {
-    headingRef.current?.focus(); // keep keyboard and screen-reader users oriented after every screen change
-  }, [category]);
+    headingRef.current?.focus();
+  }, [category, session.status]);
+
+  // Delete the container when the tab closes or the page unmounts. (The server also closes idle sessions.)
+  useEffect(() => {
+    const release = () => {
+      const id = sessionRef.current;
+      sessionRef.current = null;
+      if (id) closeSession(id);
+    };
+    // Both events: browsers differ in which one fires when a tab is closed or navigated away. Releasing twice is harmless.
+    window.addEventListener("pagehide", release);
+    window.addEventListener("beforeunload", release);
+    return () => {
+      window.removeEventListener("pagehide", release);
+      window.removeEventListener("beforeunload", release);
+      release();
+    };
+  }, []);
+
+  function release() {
+    const id = sessionRef.current;
+    sessionRef.current = null;
+    if (id) closeSession(id);
+  }
+
+  /** Picking a category opens this person's own private container. */
+  async function choose(c: Category) {
+    const token = ++pickToken.current;
+    release();
+    setCategory(c);
+    setSession({ status: "opening", id: null });
+    // Open the container and keep the screen up for a minimum time, side by side; wait for both.
+    const [id] = await Promise.all([
+      openSession().catch(() => null), // the checks still work without one, and the screen says so
+      new Promise((resolve) => setTimeout(resolve, MIN_OPENING_MS)),
+    ]);
+    if (token !== pickToken.current) {
+      if (id) closeSession(id); // they left while it was opening
+      return;
+    }
+    sessionRef.current = id;
+    setSession({ status: id ? "ready" : "none", id });
+  }
+
+  function back() {
+    pickToken.current++;
+    release();
+    setCategory(null);
+    setSession({ status: "idle", id: null });
+  }
 
   const chosen = CATEGORIES.find((c) => c.id === category);
 
@@ -59,7 +118,7 @@ export default function Home() {
               <button
                 key={c.id}
                 type="button"
-                onClick={() => setCategory(c.id)}
+                onClick={() => choose(c.id)}
                 className="rounded-lg border border-zinc-300 p-4 text-left transition hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:hover:bg-zinc-900"
               >
                 <span className="flex flex-wrap items-center gap-2">
@@ -81,25 +140,46 @@ export default function Home() {
         </section>
       )}
 
-      {chosen && (
+      {chosen && session.status === "opening" && (
+        <section className="mt-16 flex flex-col items-center gap-4 text-center" role="status" aria-live="polite">
+          <Loader cellSize={20} />
+          <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold outline-none">
+            Opening a private container…
+          </h2>
+          <p className="max-w-md text-sm text-zinc-500">
+            This is your own throwaway environment. Files and email headers you check are read inside it, with no network and
+            a read-only disk. It is deleted when you leave this screen.
+          </p>
+        </section>
+      )}
+
+      {chosen && session.status !== "opening" && (
         <div className="mt-6">
-          <button
-            type="button"
-            onClick={() => setCategory(null)}
-            className="text-sm text-zinc-500 underline underline-offset-2"
-          >
+          <button type="button" onClick={back} className="text-sm text-zinc-500 underline underline-offset-2">
             ← Change category
           </button>
           <h2 ref={headingRef} tabIndex={-1} className="mt-2 text-xl font-semibold outline-none">
             {chosen.title}
           </h2>
+          <p className="mt-2 flex items-start gap-2 text-xs text-zinc-500">
+            <span
+              className={`mt-0.5 inline-block size-2 shrink-0 rounded-full ${session.id ? "bg-emerald-500" : "bg-amber-500"}`}
+              aria-hidden
+            />
+            <span>
+              {session.id
+                ? "Your private container is open. Files and email headers you check here are read inside it, with no network. It is deleted when you leave this screen, close the tab, or after 10 idle minutes. The AI model runs outside it."
+                : "No sandbox container is available (Docker is not running or the image is missing), so files and headers are read directly by the server."}
+            </span>
+          </p>
 
           <div className="mt-4">
-            {chosen.id === "phishing" && <PhishingCheck />}
+            {chosen.id === "phishing" && <PhishingCheck sessionId={session.id} />}
 
             {chosen.id === "document" && (
               <DocumentCheck
                 apiBase={API}
+                sessionId={session.id}
                 heading="Upload a document"
                 intro="Upload an invoice, letter or photo of one. TrustGuard reads what the file says about itself: which program made it, when, whether it was saved again afterwards. The file is read in memory and never stored."
               />
@@ -109,12 +189,14 @@ export default function Home() {
               <div className="space-y-6">
                 <DocumentCheck
                   apiBase={API}
+                  sessionId={session.id}
                   heading="Check an image"
                   intro="Upload a photo, profile picture or screenshot. TrustGuard reads what the file says about itself: whether it names an AI image tool, carries AI-generation settings or content credentials, or was edited. The file is read in memory and never stored."
                   accept=".jpg,.jpeg,.png"
                   fileLabel="Image (JPG or PNG, up to 10 MB)"
                   showVendor={false}
                   buttonLabel="Check image"
+                  uploadLabel="Upload image"
                 />
 
                 <Card title="Not available yet">
@@ -136,7 +218,7 @@ export default function Home() {
                   </ul>
                   <p className="mt-3 text-sm">
                     If they wrote to you, you can also{" "}
-                    <button type="button" onClick={() => setCategory("phishing")} className="underline underline-offset-2">
+                    <button type="button" onClick={() => choose("phishing")} className="underline underline-offset-2">
                       check what they wrote
                     </button>
                     .

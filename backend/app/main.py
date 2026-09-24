@@ -1,13 +1,19 @@
+import asyncio
 import json
 import os
+import queue
+import threading
 from typing import Optional
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
+from . import documents, sandbox
 from .analyzers.document import MAX_BYTES, analyze_document
+from .analyzers.headers import HeaderInfo
 from .models import Analysis, DocumentReport, Category, Direction, Scenario, Signal
 from .analyzers.text import MAX_CHARS
 from .reasoning import analyze_with_reasoning, provider_config
@@ -102,29 +108,139 @@ class TextRequest(BaseModel):
     organisation: Optional[str] = Field(default=None, max_length=120, description="Company the sender claims to be from, if known")
 
 
+def _validate_text_request(req: TextRequest) -> tuple[bool, bool]:
+    """Returns (has_headers, in_container). Problems are ordinary HTTP errors, raised before any streaming starts."""
+    has_headers = bool(req.headers and req.headers.strip())
+    if not req.text.strip() and not has_headers:
+        raise HTTPException(422, "give the message text, the email headers, or both")
+    in_container = False
+    if has_headers:
+        try:
+            in_container = sandbox.mode() == "container"
+        except sandbox.SandboxUnavailable as exc:
+            raise HTTPException(503, str(exc)) from None
+    return has_headers, in_container
+
+
+def _run_text_analysis(req: TextRequest, session_id: Optional[str], in_container: bool, progress=None) -> Analysis:
+    header_info, isolation = None, "none"
+    if req.headers and req.headers.strip() and in_container:
+        isolation = "container"
+        if progress:
+            progress("container")
+        try:
+            header_info = sandbox.parse_headers(req.headers, sandbox.sessions.get(session_id))
+        except sandbox.SandboxError:
+            header_info = HeaderInfo()  # fail closed: never parse untrusted headers in this process
+    analysis = analyze_with_reasoning(req.text, sender_email=req.sender_email, organisation=req.organisation,
+                                      use_cache=True, headers=req.headers, header_info=header_info, progress=progress)
+    analysis.isolation = isolation
+    return analysis
+
+
 @app.post("/analyze-text")
-def analyze_free_text(req: TextRequest) -> Analysis:
+def analyze_free_text(req: TextRequest, x_session_id: Optional[str] = Header(default=None)) -> Analysis:
     """Free-text analysis: reasoning model first (when configured), then the rule-based check, then scoring.
     Text-only: no device, IP or link data."""
-    if not req.text.strip() and not (req.headers and req.headers.strip()):
-        raise HTTPException(422, "give the message text, the email headers, or both")
-    return analyze_with_reasoning(req.text, sender_email=req.sender_email,
-                                 organisation=req.organisation, use_cache=True, headers=req.headers)
+    _, in_container = _validate_text_request(req)
+    return _run_text_analysis(req, x_session_id, in_container)
+
+
+def _ndjson_stream(fn) -> StreamingResponse:
+    """Runs fn(progress) in a thread and reports it as newline-delimited JSON events.
+
+    Events: {"stage": "started" | "container" | "reading" | "verifying"} as each real stage begins, then
+    {"stage": "done", "result": <result>} or {"stage": "error", "detail": "..."}. Stages that do not apply
+    (no headers, no model) are simply never sent."""
+    events: "queue.Queue[Optional[dict]]" = queue.Queue()
+
+    def work() -> None:
+        try:
+            events.put({"stage": "started"})
+            result = fn(lambda stage: events.put({"stage": stage}))
+            events.put({"stage": "done", "result": result.model_dump(mode="json")})
+        except Exception:  # nothing internal is echoed to the user
+            events.put({"stage": "error", "detail": "The check failed."})
+        finally:
+            events.put(None)
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def stream():
+        while True:
+            item = events.get()
+            if item is None:
+                return
+            yield json.dumps(item) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+@app.post("/analyze-text/stream")
+def analyze_free_text_stream(req: TextRequest, x_session_id: Optional[str] = Header(default=None)) -> StreamingResponse:
+    """The same analysis as /analyze-text, reported as it happens."""
+    _, in_container = _validate_text_request(req)
+    return _ndjson_stream(lambda progress: _run_text_analysis(req, x_session_id, in_container, progress))
 
 
 @app.get("/config")
 def config():
     """Lets the UI tell the user honestly whether their text will be sent to a reasoning model."""
-    return provider_config()
+    return {**provider_config(), "sandbox": sandbox.status()}
 
 
-@app.post("/analyze-document")
-async def analyze_document_upload(file: UploadFile = File(...), vendor: Optional[str] = Form(default=None)) -> DocumentReport:
-    """Read a file's metadata and flag what looks unusual. The file is processed in memory and never stored."""
+async def _read_upload(file: UploadFile, vendor: Optional[str]) -> tuple[bytes, str, Optional[str]]:
+    """Reads an upload into memory (never to disk) and applies the size limits. Problems are ordinary HTTP errors."""
     data = await file.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
         raise HTTPException(413, f"File is larger than {MAX_BYTES // (1024 * 1024)} MB")
     if not data:
         raise HTTPException(422, "File is empty")
-    vendor = (vendor or "").strip()[:120] or None
-    return analyze_document(data, file.filename or "", vendor)
+    try:
+        sandbox.mode()  # raises when the sandbox is required but missing
+    except sandbox.SandboxUnavailable as exc:
+        raise HTTPException(503, str(exc)) from None
+    return data, file.filename or "", (vendor or "").strip()[:120] or None
+
+
+@app.post("/analyze-document")
+async def analyze_document_upload(file: UploadFile = File(...), vendor: Optional[str] = Form(default=None),
+                                  x_session_id: Optional[str] = Header(default=None)) -> DocumentReport:
+    """Reads a file's metadata AND contents (in the sandbox), lets the reasoning model read the contents, verifies
+    what it says, and returns one result. The file is processed in memory and never stored."""
+    data, filename, vendor = await _read_upload(file, vendor)
+    return await asyncio.to_thread(documents.run_document_analysis, data, filename, vendor, x_session_id)
+
+
+@app.post("/analyze-document/stream")
+async def analyze_document_stream(file: UploadFile = File(...), vendor: Optional[str] = Form(default=None),
+                                  x_session_id: Optional[str] = Header(default=None)) -> StreamingResponse:
+    """The same as /analyze-document, reported stage by stage (see _ndjson_stream)."""
+    data, filename, vendor = await _read_upload(file, vendor)
+    return _ndjson_stream(lambda progress: documents.run_document_analysis(data, filename, vendor, x_session_id, progress))
+
+
+@app.post("/sessions")
+def open_session():
+    """Opens this person's private container. Called when they pick a category; takes a second or two."""
+    try:
+        in_container = sandbox.mode() == "container"
+    except sandbox.SandboxUnavailable as exc:
+        raise HTTPException(503, str(exc)) from None
+    if not in_container:
+        return {"session_id": None, "isolation": "none"}
+    try:
+        sid = sandbox.sessions.open()
+    except sandbox.SandboxError:
+        if sandbox.status()["setting"] == "docker":
+            raise HTTPException(503, "The private container could not be opened.") from None
+        return {"session_id": None, "isolation": "none"}
+    return {"session_id": sid, "isolation": "container"}
+
+
+@app.post("/sessions/{session_id}/close", status_code=204)
+def close_session(session_id: str) -> Response:
+    """Deletes the container. Also called by the browser as the tab closes, so it is a POST (works with sendBeacon)."""
+    sandbox.sessions.close(session_id)
+    return Response(status_code=204)

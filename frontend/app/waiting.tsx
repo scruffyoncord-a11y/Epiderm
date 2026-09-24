@@ -2,15 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-import OnboardCard from "@/components/ui/onboard-card";
+import Loader from "@/components/ui/loader-4";
 
 /**
- * Shown while a check is running. The three steps are honest about what is happening:
- * the request has been received, the reading is in progress (this is the long part, especially with
- * a model running on this computer), and the checks on the evidence come after. The bar is an activity
- * indicator, not a percentage: the real time is not known in advance.
- *
- * It appears only after a short delay so quick checks do not flash it.
+ * A small inline loader for short waits (reading a file). It appears only after a short delay so quick
+ * checks do not flash it. The message check uses the full-window AnalysisOverlay instead.
  */
 export function Waiting({ label, note, delay = 600 }: { label: string; note?: string; delay?: number }) {
   const [show, setShow] = useState(false);
@@ -26,9 +22,10 @@ export function Waiting({ label, note, delay = 600 }: { label: string; note?: st
         {label} {note}
       </span>
       {show && (
-        <div aria-hidden="true" className="flex flex-col items-center">
-          <OnboardCard step1="Request received" step2={label} step3="Verifying the evidence" />
-          {note && <p className="mt-1 text-center text-sm text-zinc-500">{note}</p>}
+        <div aria-hidden="true" className="flex flex-col items-center gap-2 py-2">
+          <Loader cellSize={16} />
+          <p className="text-sm text-zinc-500">{label}</p>
+          {note && <p className="text-xs text-zinc-500">{note}</p>}
         </div>
       )}
     </div>

@@ -181,16 +181,6 @@ class FollowUp(BaseModel):
     question: str
 
 
-class DocumentReport(BaseModel):
-    filename: str
-    format: str = Field(description="pdf | docx | xlsx | pptx | image | unknown")
-    size_bytes: int
-    fields: dict[str, str] = Field(default_factory=dict, description="What the file says about itself")
-    signals: list[Signal]
-    could_not_check: list[str] = Field(default_factory=list)
-    summary: str = ""
-
-
 class ReasoningInfo(BaseModel):
     """What the reasoning model contributed, shown to the user before the scored result."""
     status: str = Field(description="used | unavailable | failed")
@@ -205,6 +195,52 @@ class ReasoningInfo(BaseModel):
     inconsistencies: list[str] = Field(default_factory=list)
     innocent_explanations: list[str] = Field(default_factory=list)
     unknowns: list[str] = Field(default_factory=list)
+
+
+class Identifier(BaseModel):
+    """An identifier found inside a document, with the result of its own check digit where it has one."""
+    kind: str = Field(description="GSTIN | PAN | IFSC | IBAN | UPI | ACCOUNT")
+    value: str
+    valid: Optional[bool] = Field(default=None, description="False = structurally impossible; None = nothing to test")
+    note: str = ""
+
+
+class DocumentFacts(BaseModel):
+    """What the reading model says the document is. Every value was found verbatim in the document text."""
+    document_type: str = "unknown"
+    issuer: Optional[str] = None
+    recipient: Optional[str] = None
+    total_amount: Optional[str] = None
+    account_holder: Optional[str] = None
+    dates: list[str] = Field(default_factory=list)
+    payment_details: list[str] = Field(default_factory=list)
+
+
+class ContentReport(BaseModel):
+    extracted: bool = False
+    characters: int = 0
+    truncated: bool = False
+    pages: Optional[int] = None
+    links: list[str] = Field(default_factory=list)
+    identifiers: list[Identifier] = Field(default_factory=list)
+    excerpt: str = ""
+    notes: list[str] = Field(default_factory=list)
+    reading: Optional[ReasoningInfo] = None
+    facts: Optional[DocumentFacts] = None
+
+
+class DocumentReport(BaseModel):
+    filename: str
+    format: str = Field(description="pdf | docx | xlsx | pptx | image | unknown")
+    size_bytes: int
+    fields: dict[str, str] = Field(default_factory=dict, description="What the file says about itself")
+    signals: list[Signal]
+    could_not_check: list[str] = Field(default_factory=list)
+    summary: str = ""
+    isolation: str = Field(default="none", description="container when the file was read inside a throwaway sandbox container")
+    content: Optional[ContentReport] = None
+    band: Optional[Band] = Field(default=None, description="Overall result once the contents have been checked")
+    verification_steps: list[str] = Field(default_factory=list)
 
 
 class Analysis(BaseModel):
@@ -223,5 +259,6 @@ class Analysis(BaseModel):
     reasoning: Optional[ReasoningInfo] = None
     official_contact: Optional[OfficialContact] = None
     header_summary: Optional[HeaderSummary] = None
+    isolation: str = Field(default="none", description="container when the pasted headers were parsed inside a sandbox container")
     follow_ups: list[FollowUp] = Field(default_factory=list)
     is_placeholder: bool = Field(default=False, description="True while results are hand-written stand-ins, not engine output")

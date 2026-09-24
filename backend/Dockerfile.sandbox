@@ -1,0 +1,26 @@
+# Throwaway sandbox for parsing untrusted files and email headers.
+# Built once; a fresh container is started for every analysis and deleted afterwards.
+#
+#   docker build -f Dockerfile.sandbox -t trustguard-sandbox .
+#
+# The host starts it with: --network none --read-only --cap-drop ALL --memory 256m --pids-limit 64 --user 65534
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Only what parsing needs. No web framework, no HTTP client, no AI libraries.
+RUN pip install pypdf pillow defusedxml pydantic
+
+WORKDIR /sandbox
+
+# Explicit file list (least privilege): nothing else from the project ever enters the image.
+# Secrets (.env) are also excluded by .dockerignore.
+COPY app/__init__.py app/models.py app/worker.py app/
+COPY app/analyzers/__init__.py app/analyzers/document.py app/analyzers/headers.py app/analyzers/email.py \
+     app/analyzers/text.py app/analyzers/content.py app/analyzers/identifiers.py app/analyzers/
+
+USER 65534:65534
+ENTRYPOINT ["python", "-m", "app.worker"]

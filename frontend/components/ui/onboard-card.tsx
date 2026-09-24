@@ -1,94 +1,118 @@
 "use client";
 
-import { Check, Loader } from "lucide-react";
+import { Check, Circle, Loader } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+export type Step = { label: string; detail?: string };
+
 interface OnboardCardProps {
-  /** How long the middle bar takes to fill, in ms. It then restarts, so it works for waits of any length. */
-  duration?: number;
-  step1?: string;
-  step2?: string;
-  step3?: string;
+  steps: Step[];
+  /** The step in progress (0-based). Earlier steps show as done, later ones as upcoming. */
+  active: number;
+  /** Every step is finished. */
+  complete?: boolean;
 }
 
 /*
- * Adapted from the 21st.dev "onboard-card" for this project:
- * - Tailwind v4: `bg-linear-to-br` and CSS variables (`var(--background)`) instead of v3's `bg-gradient-to-br` and `theme()`.
- * - `text-foreground` (defined in globals.css) instead of shadcn's `text-primary`.
- * - lucide-react icons instead of react-icons.
- * - Honours "reduce motion": no spinning or looping when the user asks their system for less animation.
+ * Adapted from the 21st.dev "onboard-card". Instead of three static stacked cards, the steps are slides in a
+ * carousel: as work moves on, the row swipes so the current step sits in the middle, the finished one slips
+ * to the left with a tick, and the next one slides in from the right.
+ * - Tailwind v4 (`bg-linear-to-br`, CSS variables), lucide-react icons.
+ * - Honours "reduce motion": no swipe or spinning, the state changes instantly.
+ * - State is also exposed as data attributes / aria-current so it can be read without watching the animation.
  */
-const OnboardCard = ({
-  duration = 3000,
-  step1 = "Welcome Aboard",
-  step2 = "Verifying Details",
-  step3 = "Account Created",
-}: OnboardCardProps) => {
+const VIEW = 340; // px, width of the window
+const SLIDE = 220; // px, width of one slide
+const GAP = 12; // px between slides
+
+export default function OnboardCard({ steps, active, complete = false }: OnboardCardProps) {
   const reduceMotion = useReducedMotion();
-  const [progress, setProgress] = useState(0);
-  const [animateKey, setAnimateKey] = useState(0);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    const forward = setTimeout(() => setProgress(100), 100);
-    const reset = setTimeout(() => setAnimateKey((k) => k + 1), duration + 2000);
-    return () => {
-      clearTimeout(forward);
-      clearTimeout(reset);
-    };
-  }, [animateKey, duration, reduceMotion]);
-
-  const card =
-    "flex min-w-[250px] flex-col justify-center gap-2 rounded-md border bg-linear-to-br from-neutral-100 to-neutral-50 py-2 pl-3 pr-16 dark:from-neutral-800 dark:to-neutral-950";
+  const current = Math.min(Math.max(active, 0), steps.length - 1);
+  const x = (VIEW - SLIDE) / 2 - current * (SLIDE + GAP);
+  const spring = reduceMotion ? { duration: 0 } : ({ type: "spring", stiffness: 210, damping: 27 } as const);
 
   return (
-    <div className={cn("relative", "flex flex-col items-center justify-center gap-1 p-1")}>
-      <div className={cn(card, "scale-[0.9] opacity-80")}>
-        <div className="flex items-center justify-start gap-2 text-xs text-foreground">
-          <Loader className="size-4" aria-hidden />
-          <div>{step3}</div>
-        </div>
-        <div className="ml-5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700" />
+    <div className="flex flex-col items-center gap-3" data-complete={complete}>
+      <div className="relative overflow-hidden py-1" style={{ width: VIEW }}>
+        <motion.ol
+          className="flex list-none p-0"
+          style={{ gap: GAP, width: "max-content" }}
+          initial={false}
+          animate={{ x }}
+          transition={spring}
+        >
+          {steps.map((step, i) => {
+            const state = complete || i < current ? "done" : i === current ? "active" : "upcoming";
+            return (
+              <motion.li
+                key={step.label}
+                data-state={state}
+                aria-current={state === "active" ? "step" : undefined}
+                className="flex flex-col justify-center gap-2 rounded-md border bg-linear-to-br from-neutral-100 to-neutral-50 px-3 py-3 dark:from-neutral-800 dark:to-neutral-950"
+                style={{ width: SLIDE }}
+                initial={false}
+                animate={{ scale: state === "active" ? 1 : 0.88, opacity: state === "active" ? 1 : state === "done" ? 0.6 : 0.45 }}
+                transition={spring}
+              >
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <StepIcon state={state} reduceMotion={!!reduceMotion} />
+                  <span>{step.label}</span>
+                </div>
+                {step.detail && <p className="pl-7 text-xs text-neutral-500 dark:text-neutral-400">{step.detail}</p>}
+                <div className="ml-7 h-1.5 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
+                  {state === "done" && <div className="h-full w-full bg-green-500" />}
+                  {state === "active" && <ActivityBar reduceMotion={!!reduceMotion} />}
+                </div>
+              </motion.li>
+            );
+          })}
+        </motion.ol>
+
+        {/* soft edges so neighbouring slides fade into the page */}
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-10 [background-image:linear-gradient(to_right,var(--background)_10%,transparent_100%)]" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-10 [background-image:linear-gradient(to_left,var(--background)_10%,transparent_100%)]" />
       </div>
 
-      <div className={card}>
-        <div className="flex items-center justify-start gap-1.5 text-xs text-foreground">
-          <Loader className={cn("size-4", !reduceMotion && "animate-spin")} aria-hidden />
-          <div>{step2}</div>
-        </div>
-        <div className="ml-5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
-          <motion.div
-            key={animateKey}
-            className="h-full bg-green-500"
-            initial={{ width: reduceMotion ? "50%" : 0 }}
-            animate={{ width: reduceMotion ? "50%" : `${progress}%` }}
-            transition={{ duration: reduceMotion ? 0 : duration / 1000, ease: "easeInOut" }}
+      <div className="flex items-center gap-1.5" aria-hidden="true">
+        {steps.map((step, i) => (
+          <span
+            key={step.label}
+            className={cn(
+              "h-1.5 rounded-full transition-all",
+              complete || i < current ? "w-1.5 bg-green-500" : i === current ? "w-4 bg-green-500" : "w-1.5 bg-neutral-300 dark:bg-neutral-600",
+            )}
           />
-        </div>
+        ))}
       </div>
-
-      <div className={cn(card, "scale-[0.9] opacity-80")}>
-        <div className="flex items-center justify-start text-xs text-foreground">
-          <div className="relative">
-            <svg width="20" height="20" aria-hidden>
-              <circle cx="10" cy="10" r="5" fill="#22c55e" />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center text-background">
-              <Check className="size-2" strokeWidth={4} aria-hidden />
-            </div>
-          </div>
-          <div>{step1}</div>
-        </div>
-        <div className="ml-5 h-1.5 w-full overflow-hidden rounded-full bg-green-500" />
-      </div>
-
-      <div className="pointer-events-none absolute top-0 h-[40%] w-full [background-image:linear-gradient(to_bottom,var(--background)_20%,transparent_100%)]" />
-      <div className="pointer-events-none absolute bottom-0 h-[40%] w-full [background-image:linear-gradient(to_top,var(--background)_20%,transparent_100%)]" />
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+        {complete ? "All checks complete" : `Step ${current + 1} of ${steps.length}`}
+      </p>
     </div>
   );
-};
+}
 
-export default OnboardCard;
+function StepIcon({ state, reduceMotion }: { state: "done" | "active" | "upcoming"; reduceMotion: boolean }) {
+  if (state === "done") {
+    return (
+      <span className="relative inline-flex size-5 items-center justify-center rounded-full bg-green-500 text-background">
+        <Check className="size-3" strokeWidth={4} aria-hidden />
+      </span>
+    );
+  }
+  if (state === "active") return <Loader className={cn("size-5", !reduceMotion && "animate-spin")} aria-hidden />;
+  return <Circle className="size-5 text-neutral-400 dark:text-neutral-500" aria-hidden />;
+}
+
+function ActivityBar({ reduceMotion }: { reduceMotion: boolean }) {
+  if (reduceMotion) return <div className="h-full w-1/2 bg-green-500" />;
+  return (
+    <motion.div
+      className="h-full w-2/5 rounded-full bg-green-500"
+      initial={{ x: "-100%" }}
+      animate={{ x: "260%" }}
+      transition={{ duration: 1.3, ease: "easeInOut", repeat: Infinity }}
+    />
+  );
+}

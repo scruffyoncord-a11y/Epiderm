@@ -24,3 +24,54 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ---- Loader (ported from 21st.dev "loader-4"): a 3x3 grid of cells that light up in a diagonal wave ---- */
+.tg-loader {
+  --cell-size: 52px;
+  --cell-spacing: 1px;
+  --cells: 3;
+  display: flex;
+  flex-wrap: wrap;
+  width: calc(var(--cells) * (var(--cell-size) + 2 * var(--cell-spacing)));
+  height: calc(var(--cells) * (var(--cell-size) + 2 * var(--cell-spacing)));
+}
+
+.tg-loader .cell {
+  flex: 0 0 var(--cell-size);
+  margin: var(--cell-spacing);
+  background-color: transparent;
+  box-sizing: border-box;
+  border-radius: 4px;
+  animation: 1.5s tg-ripple ease infinite;
+}
+
+.tg-loader .cell.d-1 { animation-delay: 100ms; }
+.tg-loader .cell.d-2 { animation-delay: 200ms; }
+.tg-loader .cell.d-3 { animation-delay: 300ms; }
+.tg-loader .cell.d-4 { animation-delay: 400ms; }
+
+.tg-loader .cell:nth-child(1) { --cell-color: #00ff87; }
+.tg-loader .cell:nth-child(2) { --cell-color: #0cfd95; }
+.tg-loader .cell:nth-child(3) { --cell-color: #17fba2; }
+.tg-loader .cell:nth-child(4) { --cell-color: #23f9b2; }
+.tg-loader .cell:nth-child(5) { --cell-color: #30f7c3; }
+.tg-loader .cell:nth-child(6) { --cell-color: #3df5d4; }
+.tg-loader .cell:nth-child(7) { --cell-color: #45f4de; }
+.tg-loader .cell:nth-child(8) { --cell-color: #53f1f0; }
+.tg-loader .cell:nth-child(9) { --cell-color: #60efff; }
+
+@keyframes tg-ripple {
+  0% { background-color: transparent; }
+  30% { background-color: var(--cell-color); }
+  60% { background-color: transparent; }
+  100% { background-color: transparent; }
+}
+
+/* For people who ask their system for less motion: a still, dim grid instead of the wave. */
+@media (prefers-reduced-motion: reduce) {
+  .tg-loader .cell {
+    animation: none;
+    background-color: var(--cell-color);
+    opacity: 0.35;
+  }
+}
