@@ -360,7 +360,7 @@ export function PhishingCheck({ sessionId, onResultChange }: { sessionId: string
       )}
 
       {result && !running && (
-        <button type="button" onClick={startOver} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800">
+        <button type="button" onClick={startOver} className="no-print inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800">
           <RotateCcw className="size-4" aria-hidden />
           Check another message
         </button>
@@ -459,7 +459,7 @@ export function PhishingCheck({ sessionId, onResultChange }: { sessionId: string
 
       {result && (
         <div className="mt-4 space-y-4">
-          <DownloadReport result={result.email} />
+          <DownloadReport />
           <Card title="Privacy">
             <p className="text-sm text-zinc-600 dark:text-zinc-300">
               Nothing you paste is saved to disk. The app keeps a short-lived copy of the model&apos;s reading in memory so a

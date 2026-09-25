@@ -250,7 +250,7 @@ export function DocumentCheck({
       )}
 
       {report && !loading && (
-        <button type="button" onClick={startOver} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800">
+        <button type="button" onClick={startOver} className="no-print inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800">
           <RotateCcw className="size-4" aria-hidden />
           Check another file
         </button>
@@ -274,7 +274,7 @@ export function DocumentCheck({
       {report && (
         <div ref={resultsRef} tabIndex={-1} className="mt-6 scroll-mt-4 space-y-4 outline-none">
           <DocumentReportView report={report} />
-          <DownloadReport result={{ message: null, attachment: report, risk: report.risk }} />
+          <DownloadReport />
         </div>
       )}
     </section>

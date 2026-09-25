@@ -139,3 +139,15 @@ button.tg-card:active {
   .tg-card { transition: none; }
   button.tg-card:hover { transform: none; }
 }
+
+
+/* ---- Printing / Save as PDF: the result page as it looks on screen, without the controls ---- */
+@media print {
+  @page { margin: 10mm; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: var(--background) !important; }
+  .no-print, body::before { display: none !important; }
+  main { max-width: none !important; padding: 0 !important; }
+  .tg-card { box-shadow: none !important; break-inside: avoid; }
+  h2, h3 { break-after: avoid; }
+}

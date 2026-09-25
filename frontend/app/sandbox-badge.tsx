@@ -51,7 +51,7 @@ export function SandboxBadge({ state }: { state: SandboxState }) {
   const info = POINTS[state];
   const Icon = state === "active" ? ShieldCheck : state === "off" ? ShieldAlert : LockKeyhole;
   return (
-    <div className="fixed right-4 top-4 z-40 flex flex-col items-end gap-2 sm:right-8" onMouseLeave={() => setOpen(false)}>
+    <div className="no-print fixed right-4 top-4 z-40 flex flex-col items-end gap-2 sm:right-8" onMouseLeave={() => setOpen(false)}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
