@@ -24,8 +24,8 @@ export function Waiting({ label, note, delay = 600 }: { label: string; note?: st
       {show && (
         <div aria-hidden="true" className="flex flex-col items-center gap-2 py-2">
           <Loader cellSize={16} />
-          <p className="text-sm text-zinc-500">{label}</p>
-          {note && <p className="text-xs text-zinc-500">{note}</p>}
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">{label}</p>
+          {note && <p className="text-xs text-zinc-600 dark:text-zinc-300">{note}</p>}
         </div>
       )}
     </div>

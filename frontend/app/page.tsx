@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import Loader from "@/components/ui/loader-4";
@@ -8,6 +9,7 @@ import { Card } from "./components";
 import { DocumentCheck } from "./document-check";
 import { API, closeSession, openSession } from "./lib";
 import { PhishingCheck } from "./phishing-check";
+import { SandboxBadge, type SandboxState } from "./sandbox-badge";
 
 type Category = "phishing" | "document" | "persona";
 type Session = { status: "idle" | "opening" | "ready" | "none"; id: string | null };
@@ -44,6 +46,7 @@ export default function Home() {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const sessionRef = useRef<string | null>(null);
   const pickToken = useRef(0);
+  const [hasResult, setHasResult] = useState(false);
 
   // Focus the heading after every screen change so keyboard and screen-reader users stay oriented.
   useEffect(() => {
@@ -77,6 +80,7 @@ export default function Home() {
   async function choose(c: Category) {
     const token = ++pickToken.current;
     release();
+    setHasResult(false);
     setCategory(c);
     setSession({ status: "opening", id: null });
     // Open the container and keep the screen up for a minimum time, side by side; wait for both.
@@ -96,16 +100,19 @@ export default function Home() {
     pickToken.current++;
     release();
     setCategory(null);
+    setHasResult(false);
     setSession({ status: "idle", id: null });
   }
 
   const chosen = CATEGORIES.find((c) => c.id === category);
+  const sandboxState: SandboxState = !chosen ? "standby" : session.status === "opening" ? "opening" : session.id ? "active" : "off";
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+    <main className="mx-auto w-full max-w-[1500px] px-6 py-8 lg:px-12">
+      <SandboxBadge state={sandboxState} />
       <header>
-        <h1 className="text-3xl font-semibold tracking-tight">TrustGuard</h1>
-        <p className="mt-1 text-zinc-500">Checks whether the identity, the media and the context agree, and explains why.</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Epiderm</h1>
+        {!hasResult && <p className="mt-1 text-zinc-600 dark:text-zinc-300">Checks whether the identity, the media and the context agree, and explains why.</p>}
       </header>
 
       {!chosen && (
@@ -119,7 +126,7 @@ export default function Home() {
                 key={c.id}
                 type="button"
                 onClick={() => choose(c.id)}
-                className="rounded-lg border border-zinc-300 p-4 text-left transition hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                className="tg-card p-5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="text-base font-semibold">{c.title}</span>
@@ -133,7 +140,7 @@ export default function Home() {
                     {c.status}
                   </span>
                 </span>
-                <span className="mt-1 block text-sm text-zinc-500">{c.blurb}</span>
+                <span className="mt-1 block text-sm text-zinc-600 dark:text-zinc-300">{c.blurb}</span>
               </button>
             ))}
           </div>
@@ -146,7 +153,7 @@ export default function Home() {
           <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold outline-none">
             Opening a private container…
           </h2>
-          <p className="max-w-md text-sm text-zinc-500">
+          <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-300">
             This is your own throwaway environment. Files and email headers you check are read inside it, with no network and
             a read-only disk. It is deleted when you leave this screen.
           </p>
@@ -155,13 +162,18 @@ export default function Home() {
 
       {chosen && session.status !== "opening" && (
         <div className="mt-6">
-          <button type="button" onClick={back} className="text-sm text-zinc-500 underline underline-offset-2">
-            ← Change category
+          <button
+            type="button"
+            onClick={back}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3.5 py-2 text-sm font-medium transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-600 dark:hover:bg-zinc-800"
+          >
+            <ArrowLeft className="size-4" aria-hidden />
+            Change category
           </button>
           <h2 ref={headingRef} tabIndex={-1} className="mt-2 text-xl font-semibold outline-none">
             {chosen.title}
           </h2>
-          <p className="mt-2 flex items-start gap-2 text-xs text-zinc-500">
+          {!hasResult && <p className="mt-2 flex items-start gap-2 text-xs text-zinc-600 dark:text-zinc-300">
             <span
               className={`mt-0.5 inline-block size-2 shrink-0 rounded-full ${session.id ? "bg-emerald-500" : "bg-amber-500"}`}
               aria-hidden
@@ -171,17 +183,18 @@ export default function Home() {
                 ? "Your private container is open. Files and email headers you check here are read inside it, with no network. It is deleted when you leave this screen, close the tab, or after 10 idle minutes. The AI model runs outside it."
                 : "No sandbox container is available (Docker is not running or the image is missing), so files and headers are read directly by the server."}
             </span>
-          </p>
+          </p>}
 
           <div className="mt-4">
-            {chosen.id === "phishing" && <PhishingCheck sessionId={session.id} />}
+            {chosen.id === "phishing" && <PhishingCheck sessionId={session.id} onResultChange={setHasResult} />}
 
             {chosen.id === "document" && (
               <DocumentCheck
                 apiBase={API}
                 sessionId={session.id}
+                onResultChange={setHasResult}
                 heading="Upload a document"
-                intro="Upload an invoice, letter or photo of one. TrustGuard reads what the file says about itself: which program made it, when, whether it was saved again afterwards. The file is read in memory and never stored."
+                intro="Upload an invoice, receipt, letter or photo of one. Epiderm checks how the file was made and what it says: who is asking to be paid, whether the numbers and dates make sense, and whether it asks you to pay first. The file is read in memory and never stored."
               />
             )}
 
@@ -190,8 +203,9 @@ export default function Home() {
                 <DocumentCheck
                   apiBase={API}
                   sessionId={session.id}
+                onResultChange={setHasResult}
                   heading="Check an image"
-                  intro="Upload a photo, profile picture or screenshot. TrustGuard reads what the file says about itself: whether it names an AI image tool, carries AI-generation settings or content credentials, or was edited. The file is read in memory and never stored."
+                  intro="Upload a photo, profile picture or screenshot. Epiderm reads what the file says about itself: whether it names an AI image tool, carries AI-generation settings or content credentials, or was edited. The file is read in memory and never stored."
                   accept=".jpg,.jpeg,.png"
                   fileLabel="Image (JPG or PNG, up to 10 MB)"
                   showVendor={false}
@@ -205,7 +219,7 @@ export default function Home() {
                     <li>Video deepfake detection</li>
                     <li>Face and profile matching</li>
                   </ul>
-                  <p className="mt-3 text-sm text-zinc-500">
+                  <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
                     These are not built in this version, and the image check above only reads metadata, which is easy to
                     remove. So no warning does not mean an image is real.
                   </p>

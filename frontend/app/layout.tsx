@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TrustGuard",
+  title: "Epiderm",
   description: "Explainable trust and impersonation risk assessment",
 };
 

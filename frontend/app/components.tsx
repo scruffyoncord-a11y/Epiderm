@@ -26,9 +26,9 @@ const BAND: Record<Band, { label: string; headline: string; box: string; chip: s
 
 export function Card({ title, children, aside }: { title: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <section className="tg-card p-5">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">{title}</h2>
         {aside}
       </div>
       <div className="mt-3">{children}</div>
@@ -61,9 +61,9 @@ export function TrustBar({ score, low, high, required }: { score: number; low: n
       <div className="flex justify-between text-sm">
         <span>
           Trust score <strong>{score}</strong>{" "}
-          <span className="text-zinc-500">(range {low}-{high})</span>
+          <span className="text-zinc-600 dark:text-zinc-300">(range {low}-{high})</span>
         </span>
-        <span className="text-zinc-500">Needed for this action: {required}</span>
+        <span className="text-zinc-600 dark:text-zinc-300">Needed for this action: {required}</span>
       </div>
       <div
         className="relative mt-2 h-4 rounded bg-zinc-200 dark:bg-zinc-800"
@@ -74,7 +74,7 @@ export function TrustBar({ score, low, high, required }: { score: number; low: n
         <div className="absolute -inset-y-1 w-1 rounded bg-zinc-900 dark:bg-zinc-100" style={{ left: `calc(${score}% - 2px)` }} title="Score" />
         <div className="absolute -inset-y-1 w-0.5 bg-red-600" style={{ left: `${required}%` }} title="Required" />
       </div>
-      <div className="mt-1 flex gap-4 text-xs text-zinc-500">
+      <div className="mt-1 flex gap-4 text-xs text-zinc-600 dark:text-zinc-300">
         <span>Dark marker: score</span>
         <span>Grey band: uncertainty</span>
         <span>Red line: required</span>
@@ -96,7 +96,7 @@ export function ChecksList({ checks }: { checks: Check[] }) {
         <li key={c.id} className="flex items-start justify-between gap-3 py-2 text-sm">
           <div>
             <p>{c.label}</p>
-            {c.detail && <p className="text-xs text-zinc-500">{c.detail}</p>}
+            {c.detail && <p className="text-xs text-zinc-600 dark:text-zinc-300">{c.detail}</p>}
           </div>
           <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${CHECK_STYLE[c.result].cls}`}>
             {CHECK_STYLE[c.result].text}
@@ -132,9 +132,9 @@ export function SignalList({ signals }: { signals: Signal[] }) {
               <div className="h-1.5 w-full rounded bg-zinc-200 dark:bg-zinc-800" aria-hidden>
                 <div className={`h-full rounded ${DIR[s.direction].bar}`} style={{ width: `${weight}%` }} />
               </div>
-              <span className="w-24 shrink-0 text-right text-xs text-zinc-500">weight {weight}</span>
+              <span className="w-24 shrink-0 text-right text-xs text-zinc-600 dark:text-zinc-300">weight {weight}</span>
             </div>
-            {s.evidence && <p className="mt-0.5 text-xs text-zinc-500">{s.category}: {s.evidence}</p>}
+            {s.evidence && <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">{s.category}: {s.evidence}</p>}
           </li>
         );
       })}
@@ -161,9 +161,9 @@ export function HighlightedChat({ sender, text, signals }: { sender: string; tex
   parts.push(text.slice(pos));
   return (
     <div>
-      <p className="text-xs text-zinc-500">From: {sender}</p>
+      <p className="text-xs text-zinc-600 dark:text-zinc-300">From: {sender}</p>
       <p className="mt-1 rounded bg-zinc-100 p-3 text-sm leading-relaxed dark:bg-zinc-900">{parts}</p>
-      <p className="mt-1 text-xs text-zinc-500">Highlighted phrases are the wording that raised risk.</p>
+      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Highlighted phrases are the wording that raised risk.</p>
     </div>
   );
 }
@@ -183,12 +183,12 @@ export function Checklist({ steps }: { steps: string[] }) {
                 checked={done[i]}
                 onChange={() => setDone((d) => d.map((v, j) => (j === i ? !v : v)))}
               />
-              <span className={done[i] ? "text-zinc-500 line-through" : ""}>{step}</span>
+              <span className={done[i] ? "text-zinc-600 dark:text-zinc-300 line-through" : ""}>{step}</span>
             </label>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-sm text-zinc-500" aria-live="polite">
+      <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300" aria-live="polite">
         {count} of {steps.length} checks done.
         {count === steps.length && " Checks complete. The decision to proceed is yours."}
       </p>
@@ -213,31 +213,31 @@ export function ReasoningCard({ r }: { r: Reasoning }) {
     );
   }
   return (
-    <Card title="Reasoning model" aside={<span className="text-xs text-zinc-500">read first · {r.model}{r.local ? " · on this computer" : ""}</span>}>
+    <Card title="Reasoning model" aside={<span className="text-xs text-zinc-600 dark:text-zinc-300">read first · {r.model}{r.local ? " · on this computer" : ""}</span>}>
       <p className="text-sm leading-relaxed">{r.summary}</p>
       <dl className="mt-3 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
         {r.claimed_identity && (
           <div>
-            <dt className="text-xs text-zinc-500">Sender claims to be</dt>
+            <dt className="text-xs text-zinc-600 dark:text-zinc-300">Sender claims to be</dt>
             <dd>{r.claimed_identity}</dd>
           </div>
         )}
         {r.request_type && (
           <div>
-            <dt className="text-xs text-zinc-500">What is being asked</dt>
+            <dt className="text-xs text-zinc-600 dark:text-zinc-300">What is being asked</dt>
             <dd>{r.request_type.replace(/_/g, " ")}</dd>
           </div>
         )}
         {r.concern && (
           <div>
-            <dt className="text-xs text-zinc-500">Model&apos;s concern (advisory)</dt>
+            <dt className="text-xs text-zinc-600 dark:text-zinc-300">Model&apos;s concern (advisory)</dt>
             <dd>{CONCERN[r.concern]}</dd>
           </div>
         )}
       </dl>
       {r.inconsistencies.length > 0 && (
         <div className="mt-3">
-          <p className="text-xs font-semibold text-zinc-500">Does not add up</p>
+          <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Does not add up</p>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
             {r.inconsistencies.map((x) => (
               <li key={x}>{x}</li>
@@ -247,7 +247,7 @@ export function ReasoningCard({ r }: { r: Reasoning }) {
       )}
       {r.innocent_explanations.length > 0 && (
         <div className="mt-3">
-          <p className="text-xs font-semibold text-zinc-500">Genuine explanations to consider</p>
+          <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Genuine explanations to consider</p>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
             {r.innocent_explanations.map((x) => (
               <li key={x}>{x}</li>
@@ -255,7 +255,7 @@ export function ReasoningCard({ r }: { r: Reasoning }) {
           </ul>
         </div>
       )}
-      <p className="mt-3 text-xs text-zinc-500">{r.note}</p>
+      <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-300">{r.note}</p>
     </Card>
   );
 }
@@ -272,7 +272,7 @@ export function OfficialContactCard({ c }: { c: OfficialContact }) {
           {c.site}
         </a>
       </p>
-      <p className="mt-2 text-xs text-zinc-500">
+      <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
         Open the official site yourself and use the contact details there, never those in the message. This short list is
         curated by the team, not by the AI, and may be out of date.
       </p>
@@ -302,7 +302,7 @@ export function FollowUpCard({ items, onSubmit, busy }: { items: FollowUp[]; onS
       >
         {wantsEmail && (
           <div>
-            <label htmlFor="fu-email" className="block text-xs text-zinc-500">Sender&apos;s email address</label>
+            <label htmlFor="fu-email" className="block text-xs text-zinc-600 dark:text-zinc-300">Sender&apos;s email address</label>
             <input
               id="fu-email"
               type="email"
@@ -316,7 +316,7 @@ export function FollowUpCard({ items, onSubmit, busy }: { items: FollowUp[]; onS
         )}
         {wantsOrg && (
           <div>
-            <label htmlFor="fu-org" className="block text-xs text-zinc-500">Company they claim to be from</label>
+            <label htmlFor="fu-org" className="block text-xs text-zinc-600 dark:text-zinc-300">Company they claim to be from</label>
             <input
               id="fu-org"
               type="text"
@@ -336,7 +336,7 @@ export function FollowUpCard({ items, onSubmit, busy }: { items: FollowUp[]; onS
           {busy ? "Re-checking…" : "Re-check"}
         </button>
       </form>
-      <p className="mt-2 text-xs text-zinc-500">The message is not read again from scratch, so this is quick.</p>
+      <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">The message is not read again from scratch, so this is quick.</p>
     </Card>
   );
 }
@@ -354,7 +354,7 @@ export function HeaderCard({ h, isolation }: { h: HeaderSummary; isolation?: str
       <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
         {(h.from_display || h.from_email) && (
           <div>
-            <dt className="text-xs text-zinc-500">Sent from</dt>
+            <dt className="text-xs text-zinc-600 dark:text-zinc-300">Sent from</dt>
             <dd className="break-words">
               {h.from_display ? `${h.from_display} ` : ""}
               {h.from_email ? `<${h.from_email}>` : ""}
@@ -363,19 +363,19 @@ export function HeaderCard({ h, isolation }: { h: HeaderSummary; isolation?: str
         )}
         {h.reply_to && (
           <div>
-            <dt className="text-xs text-zinc-500">Replies go to</dt>
+            <dt className="text-xs text-zinc-600 dark:text-zinc-300">Replies go to</dt>
             <dd className="break-words">{h.reply_to}</dd>
           </div>
         )}
         {h.subject && (
           <div className="sm:col-span-2">
-            <dt className="text-xs text-zinc-500">Subject</dt>
+            <dt className="text-xs text-zinc-600 dark:text-zinc-300">Subject</dt>
             <dd className="break-words">{h.subject}</dd>
           </div>
         )}
         {h.sending_ip && (
           <div className="sm:col-span-2">
-            <dt className="text-xs text-zinc-500">Sending mail server</dt>
+            <dt className="text-xs text-zinc-600 dark:text-zinc-300">Sending mail server</dt>
             <dd className="break-words">
               {h.sending_ip}
               {h.sending_host ? ` (${h.sending_host})` : ""}
@@ -393,7 +393,7 @@ export function HeaderCard({ h, isolation }: { h: HeaderSummary; isolation?: str
           );
         })}
       </div>
-      <p className="mt-3 text-xs text-zinc-500">
+      <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-300">
         SPF, DKIM and DMARC are the receiving mail service&apos;s own check that the sender was allowed to send for that
         domain. Passing does not prove the content is honest, because a scammer&apos;s own domain passes too. Only these fields
         are shown; your own address and the rest of the headers are discarded.
@@ -406,7 +406,7 @@ export function HeaderCard({ h, isolation }: { h: HeaderSummary; isolation?: str
 /** Says plainly whether untrusted input was handled inside a private, throwaway container. */
 export function SandboxNote({ container, what }: { container: boolean; what: string }) {
   return (
-    <p className="mt-2 flex items-start gap-2 text-xs text-zinc-500">
+    <p className="mt-2 flex items-start gap-2 text-xs text-zinc-600 dark:text-zinc-300">
       <span
         className={`mt-0.5 inline-block size-2 shrink-0 rounded-full ${container ? "bg-emerald-500" : "bg-amber-500"}`}
         aria-hidden
@@ -426,7 +426,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   if (!value) return null;
   return (
     <div>
-      <dt className="text-xs text-zinc-500">{label}</dt>
+      <dt className="text-xs text-zinc-600 dark:text-zinc-300">{label}</dt>
       <dd className="break-words text-sm">{value}</dd>
     </div>
   );
@@ -447,7 +447,7 @@ export function DocumentReadingCard({ content }: { content: ContentReport }) {
     );
   }
   return (
-    <Card title="What the document says" aside={<span className="text-xs text-zinc-500">read first · {r.model}{r.local ? " · on this computer" : ""}</span>}>
+    <Card title="What the document says" aside={<span className="text-xs text-zinc-600 dark:text-zinc-300">read first · {r.model}{r.local ? " · on this computer" : ""}</span>}>
       <p className="text-sm leading-relaxed">{r.summary}</p>
       <dl className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-2">
         <Field label="Looks like" value={f.document_type.replace(/_/g, " ")} />
@@ -460,7 +460,7 @@ export function DocumentReadingCard({ content }: { content: ContentReport }) {
       </dl>
       {f.payment_details.length > 0 && (
         <div className="mt-3">
-          <p className="text-xs font-semibold text-zinc-500">Payment details as written</p>
+          <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Payment details as written</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm">
             {f.payment_details.map((d) => (
               <li key={d}>{d}</li>
@@ -470,7 +470,7 @@ export function DocumentReadingCard({ content }: { content: ContentReport }) {
       )}
       {r.inconsistencies.length > 0 && (
         <div className="mt-3">
-          <p className="text-xs font-semibold text-zinc-500">Does not add up (the model&apos;s view, for information only)</p>
+          <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Does not add up (the model&apos;s view, for information only)</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm">
             {r.inconsistencies.map((d) => (
               <li key={d}>{d}</li>
@@ -478,7 +478,7 @@ export function DocumentReadingCard({ content }: { content: ContentReport }) {
           </ul>
         </div>
       )}
-      <p className="mt-3 text-xs text-zinc-500">{r.note}</p>
+      <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-300">{r.note}</p>
     </Card>
   );
 }
@@ -502,14 +502,14 @@ export function IdentifiersCard({ items }: { items: Identifier[] }) {
                 <p>
                   <span className="font-medium">{i.kind}</span> <span className="break-all font-mono text-xs">{i.value}</span>
                 </p>
-                {i.note && <p className="text-xs text-zinc-500">{i.note}</p>}
+                {i.note && <p className="text-xs text-zinc-600 dark:text-zinc-300">{i.note}</p>}
               </div>
               <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${st.cls}`}>{st.text}</span>
             </li>
           );
         })}
       </ul>
-      <p className="mt-2 text-xs text-zinc-500">
+      <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
         A check digit can prove a number is impossible, but not that it belongs to this vendor: anyone can compute a valid one.
         Confirm ownership with the official registry or the vendor.
       </p>

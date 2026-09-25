@@ -1,10 +1,12 @@
 "use client";
 
-import { Upload, X } from "lucide-react";
+import { RotateCcw, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AnalysisOverlay } from "./analysis-overlay";
 import { Card, Checklist, DecisionBanner, DocumentReadingCard, IdentifiersCard, SignalList } from "./components";
 import { readStream } from "./lib";
+import { DownloadReport } from "./download-report";
+import { RiskDashboard } from "./risk-dashboard";
 import type { Config, DocumentReport } from "./types";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -50,18 +52,20 @@ type Props = {
   buttonLabel?: string;
   uploadLabel?: string;
   sessionId?: string | null;
+  onResultChange?: (has: boolean) => void;
 };
 
 export function DocumentCheck({
   apiBase,
   heading = "Check a document",
-  intro = "Upload an invoice, letter or photo of one. TrustGuard reads what the file says about itself (which program made it, when, whether it was saved again) and what it says: who is asking to be paid, where the money goes, and whether any tax or bank numbers are impossible. The file is read in memory and never stored.",
+  intro = "Upload an invoice, letter or photo of one. Epiderm reads what the file says about itself (which program made it, when, whether it was saved again) and what it says: who is asking to be paid, where the money goes, and whether any tax or bank numbers are impossible. The file is read in memory and never stored.",
   accept = DEFAULT_ACCEPT,
   fileLabel = "File (PDF, Word, Excel, PowerPoint, JPG or PNG, up to 10 MB)",
   showVendor = true,
   buttonLabel = "Check document",
   uploadLabel = "Upload document",
   sessionId = null,
+  onResultChange,
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +96,12 @@ export function DocumentCheck({
       return;
     }
     setFile(f);
+  }
+
+  function startOver() {
+    setReport(null);
+    setVendor("");
+    clear();
   }
 
   function clear() {
@@ -149,6 +159,10 @@ export function DocumentCheck({
   }
 
   useEffect(() => {
+    onResultChange?.(!!report && !loading);
+  }, [report, loading, onResultChange]);
+
+  useEffect(() => {
     if (!report || loading) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     resultsRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
@@ -157,79 +171,90 @@ export function DocumentCheck({
 
   return (
     <section aria-labelledby="doc-label">
-      <h2 id="doc-label" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-        {heading}
-      </h2>
-      <p className="mt-2 text-sm text-zinc-500">{intro}</p>
+      {!report && (
+        <>
+        <h2 id="doc-label" className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
+          {heading}
+        </h2>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{intro}</p>
 
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        <div>
-          <p id="doc-file-hint" className="text-sm text-zinc-500">
-            {fileLabel}
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-3">
-            {/* The real input stays in the page (keyboard and screen-reader accessible); the label is the visible button. */}
-            <input
-              id="doc-file"
-              ref={inputRef}
-              type="file"
-              accept={accept}
-              aria-describedby="doc-file-hint"
-              onChange={(e) => pick(e.target.files?.[0] ?? null)}
-              className="peer sr-only"
-            />
-            <label
-              htmlFor="doc-file"
-              className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-50 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              <Upload className="size-4" aria-hidden />
-              {file ? "Choose a different file" : uploadLabel}
-            </label>
-            {file ? (
-              <span className="flex min-w-0 items-center gap-2 text-sm">
-                <span className="max-w-[16rem] truncate" title={file.name}>
-                  {file.name}
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <div>
+            <p id="doc-file-hint" className="text-sm text-zinc-600 dark:text-zinc-300">
+              {fileLabel}
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              {/* The real input stays in the page (keyboard and screen-reader accessible); the label is the visible button. */}
+              <input
+                id="doc-file"
+                ref={inputRef}
+                type="file"
+                accept={accept}
+                aria-describedby="doc-file-hint"
+                onChange={(e) => pick(e.target.files?.[0] ?? null)}
+                className="peer sr-only"
+              />
+              <label
+                htmlFor="doc-file"
+                className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-50 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              >
+                <Upload className="size-4" aria-hidden />
+                {file ? "Choose a different file" : uploadLabel}
+              </label>
+              {file ? (
+                <span className="flex min-w-0 items-center gap-2 text-sm">
+                  <span className="max-w-[16rem] truncate" title={file.name}>
+                    {file.name}
+                  </span>
+                  <span className="shrink-0 text-zinc-600 dark:text-zinc-300">({formatSize(file.size)})</span>
+                  <button
+                    type="button"
+                    onClick={clear}
+                    aria-label={`Remove ${file.name}`}
+                    className="shrink-0 rounded p-1 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 hover:text-inherit dark:hover:bg-zinc-800"
+                  >
+                    <X className="size-4" aria-hidden />
+                  </button>
                 </span>
-                <span className="shrink-0 text-zinc-500">({formatSize(file.size)})</span>
-                <button
-                  type="button"
-                  onClick={clear}
-                  aria-label={`Remove ${file.name}`}
-                  className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-inherit dark:hover:bg-zinc-800"
-                >
-                  <X className="size-4" aria-hidden />
-                </button>
-              </span>
-            ) : (
-              <span className="text-sm text-zinc-500">No file chosen</span>
-            )}
+              ) : (
+                <span className="text-sm text-zinc-600 dark:text-zinc-300">No file chosen</span>
+              )}
+            </div>
           </div>
+          {showVendor && (
+          <div>
+            <label htmlFor="doc-vendor" className="block text-sm text-zinc-600 dark:text-zinc-300">
+              Vendor name on the invoice (optional)
+            </label>
+            <input
+              id="doc-vendor"
+              type="text"
+              value={vendor}
+              onChange={(e) => setVendor(e.target.value)}
+              maxLength={120}
+              placeholder="e.g. Sunrise Traders"
+              className="mt-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-700"
+            />
+          </div>
+          )}
+          <button
+            type="button"
+            onClick={run}
+            disabled={!file || loading}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            {loading ? "Reading…" : buttonLabel}
+          </button>
         </div>
-        {showVendor && (
-        <div>
-          <label htmlFor="doc-vendor" className="block text-sm text-zinc-500">
-            Vendor name on the invoice (optional)
-          </label>
-          <input
-            id="doc-vendor"
-            type="text"
-            value={vendor}
-            onChange={(e) => setVendor(e.target.value)}
-            maxLength={120}
-            placeholder="e.g. Sunrise Traders"
-            className="mt-1 rounded-lg border border-zinc-300 bg-transparent p-2 text-sm dark:border-zinc-700"
-          />
-        </div>
-        )}
-        <button
-          type="button"
-          onClick={run}
-          disabled={!file || loading}
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
-        >
-          {loading ? "Reading…" : buttonLabel}
+        </>
+      )}
+
+      {report && !loading && (
+        <button type="button" onClick={startOver} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-800">
+          <RotateCcw className="size-4" aria-hidden />
+          Check another file
         </button>
-      </div>
+      )}
 
       {loading && (
         <AnalysisOverlay
@@ -248,81 +273,96 @@ export function DocumentCheck({
 
       {report && (
         <div ref={resultsRef} tabIndex={-1} className="mt-6 scroll-mt-4 space-y-4 outline-none">
-          <p className="text-xs text-zinc-500">
-            <strong className="text-inherit">{report.filename || "File"}</strong> · detected as {report.format} ·{" "}
-            {formatSize(report.size_bytes)}
-            {report.isolation === "container" ? " · opened in a sandbox container" : ""}
-            {report.content?.pages ? ` · ${report.content.pages} page(s)` : ""}
-          </p>
-
-          {report.band ? (
-            <DecisionBanner band={report.band} summary={report.summary} placeholder={false} />
-          ) : (
-            <p className="text-sm text-zinc-500" role="status">{report.summary}</p>
-          )}
-
-          {report.content && report.content.extracted && <DocumentReadingCard content={report.content} />}
-
-          {report.content && report.content.identifiers.length > 0 && <IdentifiersCard items={report.content.identifiers} />}
-
-          {Object.keys(report.fields).length > 0 && (
-            <Card title="What the file says about itself">
-              <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
-                {Object.entries(report.fields).map(([k, v]) => (
-                  <div key={k}>
-                    <dt className="text-xs text-zinc-500">{k}</dt>
-                    <dd className="break-words">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </Card>
-          )}
-
-          <Card title="What stands out" aside={<span className="text-xs text-zinc-500">strongest first</span>}>
-            <SignalList signals={report.signals} />
-          </Card>
-
-          {report.band && report.band !== "allow" && report.verification_steps.length > 0 && (
-            <Card title="Before you pay or reply">
-              <Checklist steps={report.verification_steps} />
-            </Card>
-          )}
-
-          {report.content && report.content.links.length > 0 && (
-            <Card title="Links inside the document">
-              <ul className="space-y-1 text-sm">
-                {report.content.links.map((l) => (
-                  <li key={l} className="break-all font-mono text-xs">{l}</li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-zinc-500">Shown as text only. They were not opened. Do not click them to check.</p>
-            </Card>
-          )}
-
-          {report.content && report.content.excerpt && (
-            <details className="rounded-lg border border-zinc-200 p-4 text-sm dark:border-zinc-800">
-              <summary className="cursor-pointer font-medium">
-                Text we read from the file ({report.content.characters.toLocaleString()} characters
-                {report.content.truncated ? ", cut short" : ""})
-              </summary>
-              <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs text-zinc-600 dark:text-zinc-400">
-                {report.content.excerpt}
-              </pre>
-            </details>
-          )}
-
-          {report.could_not_check.length > 0 && (
-            <Card title="What we could not check">
-              <ul className="list-disc space-y-1 pl-5 text-sm">
-                {report.could_not_check.map((c) => (
-                  <li key={c}>{c}</li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-zinc-500">Unchecked is not the same as suspicious.</p>
-            </Card>
-          )}
+          <DocumentReportView report={report} />
+          <DownloadReport result={{ message: null, attachment: report, risk: report.risk }} />
         </div>
       )}
     </section>
+  );
+}
+
+/** Everything found in one document. Also used for an email's attachment. */
+export function DocumentReportView({ report, showRisk = true }: { report: DocumentReport; showRisk?: boolean }) {
+  return (
+    <div className={showRisk ? "grid items-start gap-4 lg:grid-cols-2" : "space-y-4"}>
+      <p className="text-xs text-zinc-600 dark:text-zinc-300 lg:col-span-2">
+        <strong className="text-inherit">{report.filename || "File"}</strong> · detected as {report.format} ·{" "}
+        {formatSize(report.size_bytes)}
+        {report.isolation === "container" ? " · opened in a sandbox container" : ""}
+        {report.content?.pages ? ` · ${report.content.pages} page(s)` : ""}
+      </p>
+
+      {report.risk ? (
+        <>
+          {showRisk && <div className="lg:col-span-2"><RiskDashboard risk={report.risk} /></div>}
+          <p className="text-sm lg:col-span-2" role="status">{report.summary}</p>
+        </>
+      ) : report.band ? (
+        <DecisionBanner band={report.band} summary={report.summary} placeholder={false} />
+      ) : (
+        <p className="text-sm text-zinc-600 dark:text-zinc-300" role="status">{report.summary}</p>
+      )}
+
+      {report.content && report.content.extracted && <DocumentReadingCard content={report.content} />}
+
+      {report.content && report.content.identifiers.length > 0 && <IdentifiersCard items={report.content.identifiers} />}
+
+      {Object.keys(report.fields).length > 0 && (
+        <Card title="What the file says about itself">
+          <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+            {Object.entries(report.fields).map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs text-zinc-600 dark:text-zinc-300">{k}</dt>
+                <dd className="break-words">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      )}
+
+      <Card title="What stands out" aside={<span className="text-xs text-zinc-600 dark:text-zinc-300">strongest first</span>}>
+        <SignalList signals={report.signals} />
+      </Card>
+
+      {report.band && report.band !== "allow" && report.verification_steps.length > 0 && (
+        <Card title="Before you pay or reply">
+          <Checklist steps={report.verification_steps} />
+        </Card>
+      )}
+
+      {report.content && report.content.links.length > 0 && (
+        <Card title="Links inside the document">
+          <ul className="space-y-1 text-sm">
+            {report.content.links.map((l) => (
+              <li key={l} className="break-all font-mono text-xs">{l}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">Shown as text only. They were not opened. Do not click them to check.</p>
+        </Card>
+      )}
+
+      {report.content && report.content.excerpt && (
+        <details className="tg-card p-5 text-sm lg:col-span-2">
+          <summary className="cursor-pointer font-medium">
+            Text we read from the file ({report.content.characters.toLocaleString()} characters
+            {report.content.truncated ? ", cut short" : ""})
+          </summary>
+          <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs text-zinc-600 dark:text-zinc-400">
+            {report.content.excerpt}
+          </pre>
+        </details>
+      )}
+
+      {report.could_not_check.length > 0 && (
+        <Card title="What we could not check">
+          <ul className="list-disc space-y-1 pl-5 text-sm">
+            {report.could_not_check.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">Unchecked is not the same as suspicious.</p>
+        </Card>
+      )}
+    </div>
   );
 }

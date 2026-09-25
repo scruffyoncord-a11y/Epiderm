@@ -68,6 +68,7 @@ export type Analysis = {
   isolation: string;
   follow_ups: FollowUp[];
   is_placeholder: boolean;
+  risk: RiskSummary | null;
 };
 
 export type Identifier = { kind: string; value: string; valid: boolean | null; note: string };
@@ -105,4 +106,26 @@ export type DocumentReport = {
   content: ContentReport | null;
   band: Band | null;
   verification_steps: string[];
+  risk: RiskSummary | null;
 };
+
+export type RiskFactor = { id: string; label: string; area: string; likelihood: number; impact: number; weight: number; source: string };
+export type RiskArea = { name: string; risk: number; suspicious: number; reassuring: number; unknown: number };
+export type RiskPart = { name: string; risk_score: number; verdict: string };
+export type RiskSummary = {
+  risk_score: number;
+  security_score: number;
+  verdict: "legit" | "suspicious" | "not_legit";
+  verdict_label: string;
+  level: "low" | "medium" | "high" | "critical";
+  band: Band;
+  areas: RiskArea[];
+  matrix: RiskFactor[];
+  suspicious: number;
+  reassuring: number;
+  unknown: number;
+  parts: RiskPart[];
+  basis: string;
+};
+
+export type EmailResult = { message: Analysis | null; attachment: DocumentReport | null; risk: RiskSummary | null };
