@@ -5,6 +5,70 @@ Explainable trust and impersonation risk assessment. Innovators Conclave 2026, T
 Give it a suspicious message, an email with an attachment, or a document. It answers in plain words: **LOOKS LEGIT**,
 **SUSPICIOUS** or **NOT LEGIT**, with a 0-100 security score, the evidence behind it, and what to do next.
 
+## The solution
+
+Epiderm does not just ask "is this fake?". It checks whether the sender, the document and the context agree, and explains why.
+It looks at the envelope before it reads the letter.
+
+### Email verification: the envelope before the letter
+
+**Step 1: before we read any content.** Every email carries hidden authentication results that are hard to fake, so we check them first.
+
+| Check | Plain-English meaning | What a failure tells us |
+|---|---|---|
+| **SPF** (the guest list) | Is the server that sent this allowed to send mail for that domain? | The sender may be a stranger using the company's name |
+| **DKIM** (the wax seal) | Is the message signed by the domain, and unchanged on the way? | It may be forged or altered in transit |
+| **DMARC** (the house rules) | Does the visible From address match, and what should happen if a check fails? | The visible sender is not the real one |
+
+We also check whether **Reply-To** quietly points somewhere else, and whether the sender's domain is a look-alike (`gmial.com`).
+
+**The pipeline:**
+
+```mermaid
+flowchart TD
+    A[Email headers and message] --> B[Preliminary check: SPF, DKIM, DMARC, Reply-To]
+    B --> C[Reverse DNS on the sending server]
+    C --> D[Read the content for red flags]
+    D --> E[Compare the sender with official domains]
+    E --> F[Risk score and verdict]
+```
+
+### Reverse DNS, content and the risk score
+
+1. **Reverse DNS lookup.** Every sending server has a number (an IP address). We look it up backwards to see the name it gives itself.
+   A real Acme email comes from a server that names itself `acmecorp.com`. No name, or the wrong name, is a warning.
+2. **Read the content.** Wording that flags scams: urgency, secrecy, "pay a fee first", OTP requests, changed bank details,
+   "don't call me". A local AI reads the context, and every quote it gives must appear in the text or it is dropped.
+3. **Comprehensive risk score.** Each warning has a strength and a confidence. They combine into one 0-100 security score and a
+   verdict. Reassuring signs never hide a warning, and for a message plus its attachment the worst part wins.
+
+Real results from the demo files in `samples/demo/`:
+
+| File | Verdict | Security score |
+|---|---|---|
+| Fake loan email (fails SPF, DKIM and DMARC) | NOT LEGIT | 1 |
+| Genuine Acme Corp email | LOOKS LEGIT | 97 |
+
+### Documents and images
+
+The same idea: check how it was made before, and what it says after.
+
+**Documents**
+- **File history:** made in Photoshop? changed after it was created? macros?
+- **Contents**, read inside a private container: PDF, Word, Excel and PowerPoint.
+- **Numbers:** real check digits on GSTIN, PAN, IFSC and IBAN. An impossible number is flagged; a valid one is neutral, never reassuring.
+- **Context:** payee against issuer, look-alike email domains, contradictory dates, pay-first wording.
+- **AI reading:** a local AI extracts who is asking to be paid and how much, then every claim is verified against the document text.
+
+**Images**
+- The same file-history checks: AI tool markers, edits and content credentials (C2PA).
+- Photographed invoices: the AI reads the text inside the picture.
+- An optional local image-forensics lab (camera-sensor patterns, two AI-image detectors and a heatmap) opens from a link.
+  It is research-grade evidence and is not part of the score.
+- Uploads are held in memory only and never stored.
+
+An email and its attachment go through both pipelines and are combined: the worst verdict wins.
+
 ## What it checks
 
 | Category | What it looks at |
