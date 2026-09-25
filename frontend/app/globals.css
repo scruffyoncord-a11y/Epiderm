@@ -3,6 +3,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --grid-line: rgba(0, 0, 0, 0.09);
+  --card-top: #ffffff;
+  --card-bottom: #f1f1f3;
+  --card-edge: rgba(0, 0, 0, 0.09);
+  --card-shine: rgba(255, 255, 255, 0.9);
+  --card-shadow: rgba(0, 0, 0, 0.18);
 }
 
 @theme inline {
@@ -16,6 +22,12 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --grid-line: rgba(255, 255, 255, 0.09);
+    --card-top: #1d1d21;
+    --card-bottom: #111113;
+    --card-edge: rgba(255, 255, 255, 0.1);
+    --card-shine: rgba(255, 255, 255, 0.09);
+    --card-shadow: rgba(0, 0, 0, 0.65);
   }
 }
 
@@ -23,6 +35,21 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* A faint square grid behind everything, fading out toward the bottom so it never competes with content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 110% 100% at 50% 0%, #000 45%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 110% 100% at 50% 0%, #000 45%, transparent 100%);
 }
 
 /* ---- Loader (ported from 21st.dev "loader-4"): a 3x3 grid of cells that light up in a diagonal wave ---- */
@@ -74,4 +101,41 @@ body {
     background-color: var(--cell-color);
     opacity: 0.35;
   }
+}
+
+
+/* ---- Raised cards: a soft gradient, rounded edges, a bright top rim and layered shadows so they sit above the page ---- */
+@layer components {
+.tg-card {
+  border: 1px solid var(--card-edge);
+  border-radius: 1.25rem;
+  background: linear-gradient(180deg, var(--card-top), var(--card-bottom));
+  box-shadow:
+    inset 0 1px 0 var(--card-shine),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 1px 2px var(--card-shadow),
+    0 8px 18px -6px var(--card-shadow),
+    0 22px 40px -18px var(--card-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+button.tg-card:hover,
+a.tg-card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 1px 0 var(--card-shine),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 2px 4px var(--card-shadow),
+    0 14px 26px -6px var(--card-shadow),
+    0 30px 50px -18px var(--card-shadow);
+}
+
+button.tg-card:active {
+  transform: translateY(0);
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tg-card { transition: none; }
+  button.tg-card:hover { transform: none; }
 }
