@@ -1,4 +1,4 @@
-"""Shared data contracts for TrustGuard.
+"""Shared data contracts for Epiderm.
 
 Every analyzer returns Signal objects in the same shape, so the scorer, the
 explanation UI and the tests never need to know which analyzer produced them.
@@ -229,6 +229,48 @@ class ContentReport(BaseModel):
     facts: Optional[DocumentFacts] = None
 
 
+# ---------------------------------------------------------------- risk summary (computed by app/risk.py)
+
+class RiskFactor(BaseModel):
+    id: str
+    label: str
+    area: str
+    likelihood: int = Field(ge=1, le=5, description="How sure we are it is real (from confidence)")
+    impact: int = Field(ge=1, le=5, description="How much it points to fraud (from strength)")
+    weight: int = Field(ge=0, le=100, description="strength x confidence, as a percentage")
+    source: str = ""
+
+
+class RiskArea(BaseModel):
+    name: str
+    risk: int = Field(ge=0, le=100)
+    suspicious: int = 0
+    reassuring: int = 0
+    unknown: int = 0
+
+
+class RiskPart(BaseModel):
+    name: str
+    risk_score: int
+    verdict: str
+
+
+class RiskSummary(BaseModel):
+    risk_score: int = Field(ge=0, le=100)
+    security_score: int = Field(ge=0, le=100)
+    verdict: str = Field(description="legit | suspicious | not_legit")
+    verdict_label: str
+    level: str = Field(description="low | medium | high | critical")
+    band: Band
+    areas: list[RiskArea] = Field(default_factory=list)
+    matrix: list[RiskFactor] = Field(default_factory=list)
+    suspicious: int = 0
+    reassuring: int = 0
+    unknown: int = 0
+    parts: list[RiskPart] = Field(default_factory=list, description="Per-item scores when several things were checked together")
+    basis: str = ""
+
+
 class DocumentReport(BaseModel):
     filename: str
     format: str = Field(description="pdf | docx | xlsx | pptx | image | unknown")
@@ -241,6 +283,7 @@ class DocumentReport(BaseModel):
     content: Optional[ContentReport] = None
     band: Optional[Band] = Field(default=None, description="Overall result once the contents have been checked")
     verification_steps: list[str] = Field(default_factory=list)
+    risk: Optional[RiskSummary] = None
 
 
 class Analysis(BaseModel):
@@ -262,3 +305,11 @@ class Analysis(BaseModel):
     isolation: str = Field(default="none", description="container when the pasted headers were parsed inside a sandbox container")
     follow_ups: list[FollowUp] = Field(default_factory=list)
     is_placeholder: bool = Field(default=False, description="True while results are hand-written stand-ins, not engine output")
+    risk: Optional[RiskSummary] = None
+
+
+class EmailResult(BaseModel):
+    """A message (and optionally its attachment) checked together."""
+    message: Optional[Analysis] = None
+    attachment: Optional[DocumentReport] = None
+    risk: Optional[RiskSummary] = None

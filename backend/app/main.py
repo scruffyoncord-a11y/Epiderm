@@ -11,10 +11,10 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from . import documents, sandbox
+from . import documents, report, risk, sandbox
 from .analyzers.document import MAX_BYTES, analyze_document
 from .analyzers.headers import HeaderInfo
-from .models import Analysis, DocumentReport, Category, Direction, Scenario, Signal
+from .models import Analysis, DocumentReport, EmailResult, Category, Direction, Scenario, Signal
 from .analyzers.text import MAX_CHARS
 from .reasoning import analyze_with_reasoning, provider_config
 from .placeholder import placeholder_analysis
@@ -40,7 +40,7 @@ load_env_file()
 
 SCENARIO_DIR = Path(__file__).resolve().parent.parent / "scenarios"
 
-app = FastAPI(title="TrustGuard API", version="0.1.0")
+app = FastAPI(title="Epiderm API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -135,6 +135,7 @@ def _run_text_analysis(req: TextRequest, session_id: Optional[str], in_container
     analysis = analyze_with_reasoning(req.text, sender_email=req.sender_email, organisation=req.organisation,
                                       use_cache=True, headers=req.headers, header_info=header_info, progress=progress)
     analysis.isolation = isolation
+    analysis.risk = risk.summarise(analysis.signals, analysis.band, "message")
     return analysis
 
 
@@ -244,3 +245,62 @@ def close_session(session_id: str) -> Response:
     """Deletes the container. Also called by the browser as the tab closes, so it is a POST (works with sendBeacon)."""
     sandbox.sessions.close(session_id)
     return Response(status_code=204)
+
+
+@app.post("/analyze-email/stream")
+async def analyze_email_stream(
+    text: str = Form(default="", max_length=MAX_CHARS),
+    headers: Optional[str] = Form(default=None, max_length=60_000),
+    sender_email: Optional[str] = Form(default=None, max_length=254),
+    organisation: Optional[str] = Form(default=None, max_length=120),
+    file: Optional[UploadFile] = File(default=None),
+    x_session_id: Optional[str] = Header(default=None),
+) -> StreamingResponse:
+    """A message and its attachment checked together, each by its own pipeline, reported stage by stage.
+
+    Message stages are as for /analyze-text/stream; the attachment's are the same names prefixed with
+    "attachment_". The result is an EmailResult with one combined risk summary (the worst verdict wins)."""
+    has_file = file is not None and bool(file.filename)
+    req = TextRequest(text=text, headers=headers or None, sender_email=sender_email or None, organisation=organisation or None)
+    has_message = bool(req.text.strip() or (req.headers and req.headers.strip()))
+    if not has_message and not has_file:
+        raise HTTPException(422, "give the message, the email headers, or an attachment")
+    in_container = _validate_text_request(req)[1] if has_message else False
+    upload = await _read_upload(file, organisation) if has_file else None
+
+    def run(progress) -> EmailResult:
+        message = _run_text_analysis(req, x_session_id, in_container, progress) if has_message else None
+        attachment = None
+        if upload is not None:
+            data, filename, vendor = upload
+            progress("attachment")
+            attachment = documents.run_document_analysis(data, filename, vendor, x_session_id,
+                                                         lambda stage: progress(f"attachment_{stage}"))
+        parts = []
+        if message is not None:
+            parts.append(("Message", message.risk))
+        if attachment is not None:
+            parts.append((f"Attachment: {attachment.filename or 'file'}", attachment.risk))
+        return EmailResult(message=message, attachment=attachment, risk=risk.combine(parts))
+
+    return _ndjson_stream(run)
+
+
+@app.post("/report")
+def make_report(result: EmailResult) -> Response:
+    """Turns a finished result (the JSON the screen already has) into a PDF. Generated in memory, never stored."""
+    if result.message is None and result.attachment is None:
+        raise HTTPException(422, "nothing to report")
+    if result.risk is None:  # a single document result sent on its own
+        parts = []
+        if result.message is not None:
+            parts.append(("Message", result.message.risk))
+        if result.attachment is not None:
+            parts.append((f"Attachment: {result.attachment.filename or 'file'}", result.attachment.risk))
+        result = result.model_copy(update={"risk": risk.combine(parts)})
+    try:
+        pdf = report.build_pdf(result)
+    except Exception:
+        raise HTTPException(500, "The report could not be built.") from None
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="epiderm-report.pdf"', "Cache-Control": "no-store"})

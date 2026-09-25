@@ -19,7 +19,7 @@ from typing import Callable, Optional
 
 from pydantic import BaseModel, Field
 
-from . import llm, reasoning as rz, sandbox
+from . import llm, reasoning as rz, risk, sandbox
 from .analyzers.content import MAX_TEXT, analyze_full, is_paid_receipt, sanitise
 from .analyzers.document import _tokens
 from .analyzers.identifiers import find_identifiers, mask
@@ -339,4 +339,5 @@ def run_document_analysis(data: bytes, filename: str, vendor: Optional[str], ses
     report.summary = _summary(report.band, report.signals, reading is not None)
     report.verification_steps = VERIFY_STEPS if report.band != Band.allow else []
     report.isolation = "container" if in_container else "none"
+    report.risk = risk.summarise(report.signals, report.band, "attachment")
     return report
