@@ -30,7 +30,8 @@ SOFT = colors.HexColor("#f4f4f7")
 _base = getSampleStyleSheet()
 BODY = ParagraphStyle("body", parent=_base["BodyText"], fontName="Helvetica", fontSize=9.5, leading=13.5, textColor=INK)
 SMALL = ParagraphStyle("small", parent=BODY, fontSize=8, leading=11, textColor=MUTED)
-H2 = ParagraphStyle("h2", parent=BODY, fontName="Helvetica-Bold", fontSize=11, leading=14, spaceBefore=12, spaceAfter=5)
+SMALL_KEEP = ParagraphStyle("smallkeep", parent=SMALL, keepWithNext=1)
+H2 = ParagraphStyle("h2", parent=BODY, fontName="Helvetica-Bold", fontSize=11, leading=14, spaceBefore=12, spaceAfter=5, keepWithNext=1)
 BRAND = ParagraphStyle("brand", parent=BODY, fontName="Times-Bold", fontSize=20, leading=24)
 SCORE = ParagraphStyle("score", parent=BODY, fontName="Times-Bold", fontSize=54, leading=58, alignment=TA_CENTER)
 SCORE_LABEL = ParagraphStyle("scorelabel", parent=SMALL, alignment=TA_CENTER, fontSize=7.5, textColor=MUTED)
@@ -80,7 +81,7 @@ def _list(items: list[str]) -> list:
 
 
 def _doc_section(att: DocumentReport) -> list:
-    out: list = [Paragraph("The attachment", H2), _p(f"{att.filename or 'file'} · {att.format} · {round(att.size_bytes / 1024) or 1} KB", SMALL)]
+    out: list = [Paragraph("The attachment", H2), _p(f"{att.filename or 'file'} · {att.format} · {round(att.size_bytes / 1024) or 1} KB", SMALL_KEEP)]
     c = att.content
     if c and c.facts:
         f = c.facts
@@ -147,8 +148,8 @@ def build_pdf(result: EmailResult, when: Optional[dt.datetime] = None) -> bytes:
         if risk.matrix:
             story += [Paragraph("Biggest warning signs", H2)]
             rows = [[_p("Finding", SMALL), _p("Area", SMALL), _p("Likelihood", SMALL), _p("Impact", SMALL)]]
-            rows += [[_p(_clean(f.label, 110)), _p(f.area, SMALL), _p(f"{f.likelihood}/5", SMALL), _p(f"{f.impact}/5", SMALL)] for f in risk.matrix[:8]]
-            t = Table(rows, colWidths=[86 * mm, 38 * mm, 18 * mm, 18 * mm], repeatRows=1)
+            rows += [[_p(_clean(f.label, 110)), _p(f"{f.area}" + (f" ({f.source.split(':')[0].lower()})" if f.source else ""), SMALL), _p(f"{f.likelihood}/5", SMALL), _p(f"{f.impact}/5", SMALL)] for f in risk.matrix[:8]]
+            t = Table(rows, colWidths=[80 * mm, 48 * mm, 16 * mm, 16 * mm], repeatRows=1)
             t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.4, LINE), ("BACKGROUND", (0, 0), (-1, 0), SOFT),
                                    ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
             story.append(t)
@@ -175,7 +176,7 @@ def build_pdf(result: EmailResult, when: Optional[dt.datetime] = None) -> bytes:
             if s not in steps:
                 steps.append(s)
     if steps:
-        story += [Paragraph("What to do before you pay or reply", H2)] + _list(steps)
+        story += [Paragraph("What to do before you pay or reply", H2)] + _list(steps[:8])
 
     unchecked: list[str] = []
     for src in (m, result.attachment):

@@ -69,3 +69,8 @@ def test_hostile_text_cannot_break_the_pdf():
 def test_clean_helper_strips_control_characters_and_shortens():
     assert report._clean("a\x00b\x07  c\n\nd") == "ab c d"
     assert len(report._clean("x" * 500, 50)) == 50
+
+
+def test_the_matrix_says_whether_a_warning_came_from_the_message_or_the_attachment():
+    text = pdf_text(client.post("/report", json=email_result(text="Do not discuss this with anyone. Urgent.")))
+    assert "(message)" in text and "(attachment)" in text
